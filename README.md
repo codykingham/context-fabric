@@ -1,8 +1,10 @@
-<img src="assets/fabric_tan_mark_light.svg" alt="Context Fabric" width="80">
+<p align="center">
+  <img src="assets/fabric_tan_mark_light.svg" alt="Context Fabric" width="120">
+</p>
 
-# Context-Fabric
+<h1 align="center">Context-Fabric</h1>
 
-A graph-based corpus engine for annotated text with efficient traversal and search.
+<p align="center">A graph-based corpus engine for annotated text with efficient traversal and search.</p>
 
 ## Overview
 
