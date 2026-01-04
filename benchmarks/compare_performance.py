@@ -74,18 +74,41 @@ class ParallelResult:
     load_time: float
 
 
-def get_memory_mb() -> float:
-    """Get current process memory usage in MB."""
-    return psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
+def get_memory_mb(use_uss: bool = False) -> float:
+    """Get current process memory usage in MB.
+
+    Args:
+        use_uss: If True, use USS (Unique Set Size) which excludes shared pages.
+                 Better for mmap'd files. Falls back to RSS if unavailable.
+    """
+    proc = psutil.Process(os.getpid())
+    if use_uss:
+        try:
+            return proc.memory_full_info().uss / 1024 / 1024
+        except (AttributeError, psutil.AccessDenied):
+            pass
+    return proc.memory_info().rss / 1024 / 1024
 
 
-def get_total_memory_mb(pids: List[int]) -> float:
-    """Get total memory usage across multiple processes in MB."""
+def get_total_memory_mb(pids: List[int], use_uss: bool = False) -> float:
+    """Get total memory usage across multiple processes in MB.
+
+    Args:
+        pids: List of process IDs to measure
+        use_uss: If True, use USS (Unique Set Size) which excludes shared pages.
+                 Better for mmap'd files as it won't double-count shared pages.
+    """
     total = 0.0
     for pid in pids:
         try:
             proc = psutil.Process(pid)
-            total += proc.memory_info().rss / 1024 / 1024
+            if use_uss:
+                try:
+                    total += proc.memory_full_info().uss / 1024 / 1024
+                except (AttributeError, psutil.AccessDenied):
+                    total += proc.memory_info().rss / 1024 / 1024
+            else:
+                total += proc.memory_info().rss / 1024 / 1024
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
     return total
@@ -234,11 +257,27 @@ def _tf_worker(source: str, ready_event, start_event, result_queue):
     ready_event.set()
     start_event.wait()
 
-    # Do some work to ensure data is accessed
-    count = sum(1 for n in range(1, min(1000, api.F.otype.maxSlot + 1)) if api.F.otype.v(n))
+    # Heavily access STRING features to test memory sharing
+    # Access multiple string features across many nodes
+    count = 0
+    string_features = []
 
-    # Report memory
-    mem = get_memory_mb()
+    # Find available string features (common ones in BHSA)
+    for fname in ['g_word_utf8', 'lex_utf8', 'g_cons_utf8', 'voc_lex_utf8',
+                  'g_lex_utf8', 'trailer_utf8', 'lex', 'g_word', 'g_cons']:
+        if hasattr(api.F, fname):
+            string_features.append(getattr(api.F, fname))
+
+    # Access string features for ALL slot nodes (words)
+    max_slot = min(api.F.otype.maxSlot, 100000)  # Cap at 100k for reasonable time
+    for n in range(1, max_slot + 1):
+        for feat in string_features:
+            val = feat.v(n)
+            if val:
+                count += 1
+
+    # Report memory using USS (unique set size, excludes shared mmap pages)
+    mem = get_memory_mb(use_uss=True)
     result_queue.put((os.getpid(), mem, count))
 
     # Wait a bit for memory measurement
@@ -257,20 +296,135 @@ def _cf_worker(source: str, ready_event, start_event, result_queue):
     ready_event.set()
     start_event.wait()
 
-    # Do some work to ensure data is accessed
-    count = sum(1 for n in range(1, min(1000, api.F.otype.maxSlot + 1)) if api.F.otype.v(n))
+    # Heavily access STRING features to test memory sharing
+    # Access multiple string features across many nodes
+    count = 0
+    string_features = []
 
-    # Report memory
-    mem = get_memory_mb()
+    # Find available string features (common ones in BHSA)
+    for fname in ['g_word_utf8', 'lex_utf8', 'g_cons_utf8', 'voc_lex_utf8',
+                  'g_lex_utf8', 'trailer_utf8', 'lex', 'g_word', 'g_cons']:
+        if hasattr(api.F, fname):
+            string_features.append(getattr(api.F, fname))
+
+    # Access string features for ALL slot nodes (words)
+    max_slot = min(api.F.otype.maxSlot, 100000)  # Cap at 100k for reasonable time
+    for n in range(1, max_slot + 1):
+        for feat in string_features:
+            val = feat.v(n)
+            if val:
+                count += 1
+
+    # Report memory using USS (unique set size, excludes shared mmap pages)
+    mem = get_memory_mb(use_uss=True)
     result_queue.put((os.getpid(), mem, count))
 
     # Wait a bit for memory measurement
     time.sleep(2)
 
 
+def benchmark_api_scenario(source: str, num_workers: int = 4) -> tuple:
+    """Benchmark API scenario: pre-load then fork workers.
+
+    This simulates a typical API deployment where:
+    1. Main process loads corpus at startup
+    2. Workers are forked (sharing memory via copy-on-write)
+    3. Workers handle requests using the pre-loaded data
+
+    Reports TOTAL deployment memory (main process + workers).
+    """
+    print(f"\n  Simulating API scenario (pre-load + fork)...")
+
+    results = {}
+
+    for name, loader in [("Text-Fabric", "tf"), ("Context-Fabric", "cf")]:
+        print(f"  [{name}] Pre-loading corpus...")
+
+        gc.collect()
+        mem_before = get_memory_mb(use_uss=True)
+
+        # Pre-load in main process
+        if loader == "tf":
+            from tf.fabric import Fabric as TFFabric
+            tf = TFFabric(locations=source, silent='deep')
+            api = tf.loadAll(silent='deep')
+        else:
+            from cfabric.core.fabric import Fabric as CFFabric
+            tf = CFFabric(locations=source, silent='deep')
+            api = tf.load('')
+
+        # Measure memory after pre-load (main process)
+        main_process_mem = get_memory_mb(use_uss=True) - mem_before
+        print(f"    Main process memory: {main_process_mem:.0f} MB")
+
+        # Fork workers (using fork context for COW sharing)
+        print(f"    Forking {num_workers} workers...")
+        ctx = mp.get_context('fork')
+        result_queue = ctx.Queue()
+
+        def api_worker(api_ref, queue):
+            """Simulate API request handling."""
+            import os
+            # Access string features (simulating API requests)
+            count = 0
+            for fname in ['g_word_utf8', 'lex_utf8', 'g_cons_utf8']:
+                if hasattr(api_ref.F, fname):
+                    feat = getattr(api_ref.F, fname)
+                    for n in range(1, min(10000, api_ref.F.otype.maxSlot + 1)):
+                        if feat.v(n):
+                            count += 1
+
+            mem = get_memory_mb(use_uss=True)
+            queue.put((os.getpid(), mem, count))
+            time.sleep(1)
+
+        processes = []
+        for i in range(num_workers):
+            p = ctx.Process(target=api_worker, args=(api, result_queue))
+            p.start()
+            processes.append(p)
+
+        # Collect results
+        worker_results = []
+        for _ in range(num_workers):
+            try:
+                worker_results.append(result_queue.get(timeout=60))
+            except:
+                pass
+
+        # Measure total worker memory (USS)
+        pids = [p.pid for p in processes]
+        workers_mem = get_total_memory_mb(pids, use_uss=True)
+
+        for p in processes:
+            p.join(timeout=5)
+            if p.is_alive():
+                p.terminate()
+
+        # Total deployment memory = main process + all workers
+        total_mem = main_process_mem + workers_mem
+        per_worker = total_mem / num_workers if num_workers > 0 else 0
+        print(f"    Workers memory (USS): {workers_mem:.0f} MB")
+        print(f"    Total deployment: {total_mem:.0f} MB ({per_worker:.0f} MB/worker)")
+
+        results[name] = ParallelResult(
+            name=name,
+            num_workers=num_workers,
+            total_memory_mb=total_mem,
+            per_worker_memory_mb=per_worker,
+            load_time=0  # Pre-loaded
+        )
+
+        # Cleanup
+        del tf, api
+        gc.collect()
+
+    return results.get("Text-Fabric"), results.get("Context-Fabric")
+
+
 def benchmark_parallel(source: str, num_workers: int = 4) -> tuple:
-    """Benchmark parallel worker memory usage."""
-    print(f"\n  Spawning {num_workers} workers...")
+    """Benchmark parallel worker memory usage (spawn mode - cold start)."""
+    print(f"\n  Spawning {num_workers} workers (cold start)...")
 
     results = {}
 
@@ -290,26 +444,26 @@ def benchmark_parallel(source: str, num_workers: int = 4) -> tuple:
             p.start()
             processes.append(p)
 
-        # Wait for all workers to be ready
+        # Wait for all workers to be ready (longer timeout for string-heavy workload)
         for evt in ready_events:
-            evt.wait(timeout=120)
+            evt.wait(timeout=300)
 
         load_time = time.perf_counter() - start_time
 
         # Signal all workers to proceed
         start_event.set()
 
-        # Collect results
+        # Collect results (longer timeout for string-heavy workload)
         worker_results = []
         for _ in range(num_workers):
             try:
-                worker_results.append(result_queue.get(timeout=30))
+                worker_results.append(result_queue.get(timeout=120))
             except:
                 pass
 
-        # Measure total memory across all workers
+        # Measure total memory across all workers using USS (excludes shared mmap pages)
         pids = [p.pid for p in processes]
-        total_mem = get_total_memory_mb(pids)
+        total_mem = get_total_memory_mb(pids, use_uss=True)
 
         # Wait for processes to finish
         for p in processes:
@@ -387,7 +541,8 @@ def create_results_table(tf_result: BenchmarkResult, cf_result: BenchmarkResult)
 
 def create_charts(tf_result: BenchmarkResult, cf_result: BenchmarkResult,
                   output_dir: Path, parallel_tf: ParallelResult = None,
-                  parallel_cf: ParallelResult = None) -> None:
+                  parallel_cf: ParallelResult = None,
+                  api_tf: ParallelResult = None, api_cf: ParallelResult = None) -> None:
     """Create performance comparison charts with dark mode."""
     # Set dark mode style
     plt.style.use('dark_background')
@@ -402,16 +557,12 @@ def create_charts(tf_result: BenchmarkResult, cf_result: BenchmarkResult,
     })
 
     colors = ['#ff6b6b', '#4ecdc4']  # Red for TF, Teal for CF
-
-    # Determine layout based on whether we have parallel results
-    if parallel_tf and parallel_cf:
-        fig, axes = plt.subplots(2, 3, figsize=(18, 11))
-        axes = axes.flatten()
-    else:
-        fig, axes = plt.subplots(2, 2, figsize=(14, 11))
-        axes = axes.flatten()
-
     corpus_name = tf_result.corpus_stats.name or "Corpus"
+
+    # Create consolidated README chart (2x2 layout with key metrics)
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    axes = axes.flatten()
+
     fig.suptitle(f'Context-Fabric vs Text-Fabric Performance\n{corpus_name}: {tf_result.corpus_stats.max_node:,} nodes, {tf_result.corpus_stats.node_features} features',
                  fontsize=18, fontweight='bold', color='white', y=0.98)
 
@@ -448,111 +599,52 @@ def create_charts(tf_result: BenchmarkResult, cf_result: BenchmarkResult,
              ha='center', va='top', fontsize=16, color='#4ecdc4', fontweight='bold',
              bbox=dict(boxstyle='round', facecolor='#1a1a2e', edgecolor='#4ecdc4', alpha=0.8))
 
-    # 3. Compile Time Comparison
+    # 3. Parallel Worker Memory (Spawn - cold start)
     ax3 = axes[2]
-    compile_times = [tf_result.compile_time, cf_result.compile_time]
-    bars3 = ax3.bar(['Text-Fabric', 'Context-Fabric'], compile_times, color=colors, edgecolor='white', linewidth=2)
-    ax3.set_ylabel('Time (seconds)', fontsize=14)
-    ax3.set_title('Initial Compile Time', fontsize=16, fontweight='bold', pad=15)
-    ax3.tick_params(axis='both', labelsize=13)
-    ax3.set_ylim(0, max(compile_times) * 1.35)
-    for bar, val in zip(bars3, compile_times):
-        ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(compile_times)*0.05,
-                f'{val:.1f}s', ha='center', va='bottom', fontsize=15, fontweight='bold')
-
-    # 4. Cache Size Comparison
-    ax4 = axes[3]
-    cache_sizes = [tf_result.cache_size, cf_result.cache_size]
-    bars4 = ax4.bar(['Text-Fabric', 'Context-Fabric'], cache_sizes, color=colors, edgecolor='white', linewidth=2)
-    ax4.set_ylabel('Size (MB)', fontsize=14)
-    ax4.set_title('Cache Size on Disk', fontsize=16, fontweight='bold', pad=15)
-    ax4.tick_params(axis='both', labelsize=13)
-    ax4.set_ylim(0, max(cache_sizes) * 1.35)
-    for bar, val in zip(bars4, cache_sizes):
-        ax4.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(cache_sizes)*0.05,
-                f'{val:.0f} MB', ha='center', va='bottom', fontsize=15, fontweight='bold')
-
-    # 5 & 6. Parallel worker results (if available)
     if parallel_tf and parallel_cf:
-        # Parallel memory comparison
-        ax5 = axes[4]
-        par_mem = [parallel_tf.total_memory_mb, parallel_cf.total_memory_mb]
-        bars5 = ax5.bar(['Text-Fabric', 'Context-Fabric'], par_mem, color=colors, edgecolor='white', linewidth=2)
-        ax5.set_ylabel('Total Memory (MB)', fontsize=14)
-        ax5.set_title(f'Parallel Memory ({parallel_tf.num_workers} Workers)', fontsize=16, fontweight='bold', pad=15)
-        ax5.tick_params(axis='both', labelsize=13)
-        ax5.set_ylim(0, max(par_mem) * 1.35)
-        for bar, val in zip(bars5, par_mem):
+        par_mem = [parallel_tf.per_worker_memory_mb, parallel_cf.per_worker_memory_mb]
+        bars3 = ax3.bar(['Text-Fabric', 'Context-Fabric'], par_mem, color=colors, edgecolor='white', linewidth=2)
+        ax3.set_ylabel('Memory per Worker (MB)', fontsize=14)
+        ax3.set_title(f'Spawn Workers ({parallel_tf.num_workers}w, cold start)', fontsize=16, fontweight='bold', pad=15)
+        ax3.tick_params(axis='both', labelsize=13)
+        ax3.set_ylim(0, max(par_mem) * 1.35)
+        for bar, val in zip(bars3, par_mem):
             label = f'{val:.0f} MB' if val < 1000 else f'{val/1024:.1f} GB'
-            ax5.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(par_mem)*0.05,
+            ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(par_mem)*0.05,
                     label, ha='center', va='bottom', fontsize=15, fontweight='bold')
-        if parallel_tf.total_memory_mb > 0:
-            mem_savings = (1 - parallel_cf.total_memory_mb / parallel_tf.total_memory_mb) * 100
-            ax5.text(0.5, 0.92, f'{mem_savings:.0f}% less memory', transform=ax5.transAxes,
+        if parallel_tf.per_worker_memory_mb > 0:
+            ratio = parallel_tf.per_worker_memory_mb / parallel_cf.per_worker_memory_mb
+            ax3.text(0.5, 0.92, f'{ratio:.1f}x less', transform=ax3.transAxes,
                      ha='center', va='top', fontsize=16, color='#4ecdc4', fontweight='bold',
                      bbox=dict(boxstyle='round', facecolor='#1a1a2e', edgecolor='#4ecdc4', alpha=0.8))
+    else:
+        ax3.text(0.5, 0.5, 'No parallel data', ha='center', va='center', fontsize=14)
+        ax3.set_title('Spawn Workers (cold start)', fontsize=16, fontweight='bold', pad=15)
 
-        # Per-worker memory
-        ax6 = axes[5]
-        per_worker = [parallel_tf.per_worker_memory_mb, parallel_cf.per_worker_memory_mb]
-        bars6 = ax6.bar(['Text-Fabric', 'Context-Fabric'], per_worker, color=colors, edgecolor='white', linewidth=2)
-        ax6.set_ylabel('Memory per Worker (MB)', fontsize=14)
-        ax6.set_title('Memory per Worker', fontsize=16, fontweight='bold', pad=15)
-        ax6.tick_params(axis='both', labelsize=13)
-        ax6.set_ylim(0, max(per_worker) * 1.35)
-        for bar, val in zip(bars6, per_worker):
+    # 4. API Workers (Fork - pre-loaded)
+    ax4 = axes[3]
+    if api_tf and api_cf:
+        api_mem = [api_tf.per_worker_memory_mb, api_cf.per_worker_memory_mb]
+        bars4 = ax4.bar(['Text-Fabric', 'Context-Fabric'], api_mem, color=colors, edgecolor='white', linewidth=2)
+        ax4.set_ylabel('Memory per Worker (MB)', fontsize=14)
+        ax4.set_title(f'Fork Workers ({api_tf.num_workers}w, pre-loaded API)', fontsize=16, fontweight='bold', pad=15)
+        ax4.tick_params(axis='both', labelsize=13)
+        ax4.set_ylim(0, max(api_mem) * 1.35)
+        for bar, val in zip(bars4, api_mem):
             label = f'{val:.0f} MB' if val < 1000 else f'{val/1024:.1f} GB'
-            ax6.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(per_worker)*0.05,
+            ax4.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(api_mem)*0.05,
                     label, ha='center', va='bottom', fontsize=15, fontweight='bold')
-        ax6.text(0.5, 0.92, 'mmap = shared memory', transform=ax6.transAxes,
-                 ha='center', va='top', fontsize=14, color='#4ecdc4', fontweight='bold',
-                 bbox=dict(boxstyle='round', facecolor='#1a1a2e', edgecolor='#4ecdc4', alpha=0.8))
+        if api_tf.per_worker_memory_mb > 0:
+            ratio = api_tf.per_worker_memory_mb / api_cf.per_worker_memory_mb
+            ax4.text(0.5, 0.92, f'{ratio:.1f}x less', transform=ax4.transAxes,
+                     ha='center', va='top', fontsize=16, color='#4ecdc4', fontweight='bold',
+                     bbox=dict(boxstyle='round', facecolor='#1a1a2e', edgecolor='#4ecdc4', alpha=0.8))
+    else:
+        ax4.text(0.5, 0.5, 'No API data', ha='center', va='center', fontsize=14)
+        ax4.set_title('Fork Workers (pre-loaded API)', fontsize=16, fontweight='bold', pad=15)
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.savefig(output_dir / 'performance_comparison.png', dpi=150, bbox_inches='tight',
-                facecolor='#0f0f1a', edgecolor='none')
-    plt.close()
-
-    # Create normalized summary chart
-    fig2, ax = plt.subplots(figsize=(12, 7))
-    fig2.patch.set_facecolor('#0f0f1a')
-
-    metrics = ['Load\nTime', 'Memory\nUsage']
-    if parallel_tf and parallel_cf:
-        metrics.append(f'Parallel\nMemory\n({parallel_tf.num_workers}w)')
-
-    tf_normalized = [1.0] * len(metrics)
-    cf_normalized = [
-        cf_result.load_time / tf_result.load_time,
-        cf_result.memory_used / tf_result.memory_used,
-    ]
-    if parallel_tf and parallel_cf:
-        cf_normalized.append(parallel_cf.total_memory_mb / parallel_tf.total_memory_mb if parallel_tf.total_memory_mb > 0 else 1.0)
-
-    x = np.arange(len(metrics))
-    width = 0.35
-
-    bars_tf = ax.bar(x - width/2, tf_normalized, width, label='Text-Fabric', color='#ff6b6b', edgecolor='white', linewidth=2)
-    bars_cf = ax.bar(x + width/2, cf_normalized, width, label='Context-Fabric', color='#4ecdc4', edgecolor='white', linewidth=2)
-
-    ax.set_ylabel('Relative to Text-Fabric (lower is better)', fontsize=14)
-    ax.set_title(f'Context-Fabric Performance (normalized)\n{corpus_name}: {tf_result.corpus_stats.max_node:,} nodes',
-                 fontsize=16, fontweight='bold', color='white', pad=15)
-    ax.set_xticks(x)
-    ax.set_xticklabels(metrics, fontsize=14)
-    ax.tick_params(axis='y', labelsize=13)
-    ax.legend(loc='upper right', fontsize=13)
-    ax.axhline(y=1.0, color='#666666', linestyle='--', alpha=0.7, linewidth=2)
-    ax.set_ylim(0, 1.4)
-
-    for bar in bars_cf:
-        height = bar.get_height()
-        pct = (1 - height) * 100
-        ax.text(bar.get_x() + bar.get_width()/2, height + 0.03,
-               f'{pct:.0f}%\nless', ha='center', va='bottom', fontsize=13, fontweight='bold', color='#4ecdc4')
-
-    plt.tight_layout()
-    plt.savefig(output_dir / 'performance_normalized.png', dpi=150, bbox_inches='tight',
                 facecolor='#0f0f1a', edgecolor='none')
     plt.close()
 
@@ -560,7 +652,8 @@ def create_charts(tf_result: BenchmarkResult, cf_result: BenchmarkResult,
 
 
 def print_results(tf_result: BenchmarkResult, cf_result: BenchmarkResult,
-                  parallel_tf: ParallelResult = None, parallel_cf: ParallelResult = None) -> None:
+                  parallel_tf: ParallelResult = None, parallel_cf: ParallelResult = None,
+                  api_tf: ParallelResult = None, api_cf: ParallelResult = None) -> None:
     """Print results to console."""
     stats = tf_result.corpus_stats
 
@@ -598,7 +691,7 @@ def print_results(tf_result: BenchmarkResult, cf_result: BenchmarkResult,
 
     if parallel_tf and parallel_cf:
         print("\n" + "=" * 70)
-        print(f"PARALLEL RESULTS ({parallel_tf.num_workers} WORKERS)")
+        print(f"SPAWN WORKERS ({parallel_tf.num_workers} workers - cold start)")
         print("=" * 70)
         print(f"\n{parallel_tf.name}:")
         print(f"  Total memory:     {parallel_tf.total_memory_mb:.0f} MB ({parallel_tf.total_memory_mb/1024:.2f} GB)")
@@ -611,8 +704,27 @@ def print_results(tf_result: BenchmarkResult, cf_result: BenchmarkResult,
         print("\n" + "-" * 70)
         if parallel_tf.total_memory_mb > 0:
             parallel_reduction = (1 - parallel_cf.total_memory_mb / parallel_tf.total_memory_mb) * 100
-            print(f"  Parallel memory savings: {parallel_reduction:.1f}%")
-            print(f"  Memory per worker ratio: {parallel_tf.per_worker_memory_mb / parallel_cf.per_worker_memory_mb:.1f}x less")
+            print(f"  Memory savings: {parallel_reduction:.1f}%")
+            print(f"  Per-worker ratio: {parallel_tf.per_worker_memory_mb / parallel_cf.per_worker_memory_mb:.1f}x less")
+
+    if api_tf and api_cf:
+        print("\n" + "=" * 70)
+        print(f"FORK WORKERS ({api_tf.num_workers} workers - pre-loaded API)")
+        print("=" * 70)
+        print("Simulates: gunicorn --preload (corpus loaded once, workers forked)")
+        print(f"\n{api_tf.name}:")
+        print(f"  Total memory:     {api_tf.total_memory_mb:.0f} MB ({api_tf.total_memory_mb/1024:.2f} GB)")
+        print(f"  Per-worker:       {api_tf.per_worker_memory_mb:.0f} MB")
+
+        print(f"\n{api_cf.name}:")
+        print(f"  Total memory:     {api_cf.total_memory_mb:.0f} MB")
+        print(f"  Per-worker:       {api_cf.per_worker_memory_mb:.0f} MB")
+
+        print("\n" + "-" * 70)
+        if api_tf.total_memory_mb > 0:
+            api_reduction = (1 - api_cf.total_memory_mb / api_tf.total_memory_mb) * 100
+            print(f"  Memory savings: {api_reduction:.1f}%")
+            print(f"  Per-worker ratio: {api_tf.per_worker_memory_mb / api_cf.per_worker_memory_mb:.1f}x less")
 
     print("=" * 70)
 
@@ -624,6 +736,7 @@ def main():
     parser.add_argument('--skip-clear', action='store_true', help='Skip clearing caches before benchmark')
     parser.add_argument('--workers', type=int, default=4, help='Number of parallel workers for mmap test')
     parser.add_argument('--skip-parallel', action='store_true', help='Skip parallel worker benchmark')
+    parser.add_argument('--skip-api', action='store_true', help='Skip API scenario (pre-load + fork) benchmark')
     args = parser.parse_args()
 
     source = args.source
@@ -656,8 +769,15 @@ def main():
         print(f"\n[3/3] Benchmarking parallel workers ({args.workers} workers)...")
         parallel_tf, parallel_cf = benchmark_parallel(source, args.workers)
 
+    # API scenario benchmark (pre-load + fork)
+    api_tf = None
+    api_cf = None
+    if not args.skip_api and args.workers > 0:
+        print(f"\n[4/4] Benchmarking API scenario (pre-load + fork, {args.workers} workers)...")
+        api_tf, api_cf = benchmark_api_scenario(source, args.workers)
+
     # Print results
-    print_results(tf_result, cf_result, parallel_tf, parallel_cf)
+    print_results(tf_result, cf_result, parallel_tf, parallel_cf, api_tf, api_cf)
 
     # Create results table
     df = create_results_table(tf_result, cf_result)
@@ -671,7 +791,7 @@ def main():
 
     # Create charts
     print("\nGenerating charts...")
-    create_charts(tf_result, cf_result, output_dir, parallel_tf, parallel_cf)
+    create_charts(tf_result, cf_result, output_dir, parallel_tf, parallel_cf, api_tf, api_cf)
 
     print("\nBenchmark complete!")
 

@@ -53,9 +53,9 @@ Context-Fabric uses memory-mapped numpy arrays for dramatically faster loading a
 
 | Metric | Text-Fabric | Context-Fabric | Improvement |
 |--------|-------------|----------------|-------------|
-| **Load Time** | 7.30s | 2.49s | **2.9x faster** |
-| **Memory Usage** | 4.9 GB | 167 MB | **97% reduction** |
-| Compile Time | 61s | 93s | 1.5x slower |
+| **Load Time** | 7.0s | 2.4s | **2.9x faster** |
+| **Memory Usage** | 6.1 GB | 1.6 GB | **74% reduction** |
+| Compile Time | 7s | 91s | 13x slower |
 | Cache Size | 138 MB | 859 MB | 6.2x larger |
 
 <p align="center">
@@ -70,12 +70,23 @@ The key insight: **compilation happens once, loading happens every session**. Co
 
 ### Parallel Worker Scaling
 
-Memory-mapped arrays enable efficient parallel processing. Multiple workers share the same mmap'd data instead of each loading a full copy into RAM:
+Memory-mapped arrays enable efficient parallel processing. Multiple workers share the same mmap'd data instead of each loading a full copy into RAM.
 
-| Workers | Text-Fabric | Context-Fabric | Savings |
-|---------|-------------|----------------|---------|
-| 4 workers | 6.9 GB total | 3.3 GB total | **52% less** |
-| Per worker | 1.7 GB | 829 MB | **2.1x less** |
+**Spawn mode** (cold start — each worker loads independently):
+
+| Metric | Text-Fabric | Context-Fabric | Savings |
+|--------|-------------|----------------|---------|
+| Total (4 workers) | 9.8 GB | 3.3 GB | **66% less** |
+| Per worker | 2.5 GB | 821 MB | **3x less** |
+
+**Fork mode** (API scenario — pre-load then fork workers):
+
+| Metric | Text-Fabric | Context-Fabric | Savings |
+|--------|-------------|----------------|---------|
+| Total (4 workers) | 5.8 GB | 440 MB | **92% less** |
+| Per worker | 1.5 GB | 110 MB | **13x less** |
+
+*Measured with USS (Unique Set Size) which correctly excludes shared mmap pages.*
 
 Run the benchmark yourself:
 
