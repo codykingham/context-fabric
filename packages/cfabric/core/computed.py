@@ -10,20 +10,16 @@ Normally, you do not use this data, but since it is there, it might be valuable,
 so we have made it accessible in the `tf.core.computed.Computeds`-API.
 
 !!! explanation "Pre-computed data storage"
-    Pre-computed data is stored in cache directories in a directory `.tf`
+    Pre-computed data is stored in a `.cfm` directory (Context Fabric Mmap format)
     inside the directory where the `otype` feature is encountered.
 
-    After pre-computation the result is `pickled` and `gzipped` and written to a
-    `.tfx` file with the same name as the name of the feature.
-    This is done for normal features and pre-computed features likewise.
+    The `.cfm` format uses memory-mapped numpy arrays for:
+    - Shared memory across async workers
+    - Reduced memory footprint
+    - Near-zero startup time after initial compilation
 
-    After version 7.7.7 version the memory footprint of some pre-computed features
-    has been reduced. Because the pre-computed features on disk are exact replicas
-    of the pre-computed features in RAM, older pre-computed data does not work with
-    versions of TF after 7.7.7.
-
-    But from that version onward, there is a parameter,
-    `tf.parameters.PACK_VERSION` to detect incompatibilities.
+    Use `TF.compile()` to generate the `.cfm` directory from `.tf` source files.
+    Subsequent calls to `TF.load()` will automatically use the compiled format.
 """
 
 
@@ -40,3 +36,77 @@ class Computed:
     def __init__(self, api, data):
         self.api = api
         self.data = data
+
+
+class RankComputed(Computed):
+    """C.rank: canonical position of each node.
+
+    Supports numpy array backend for mmap.
+    data[n-1] gives rank of node n.
+    """
+
+    def __getitem__(self, n: int) -> int:
+        return int(self.data[n - 1])
+
+
+class OrderComputed(Computed):
+    """C.order: nodes in canonical order.
+
+    Supports numpy array backend for mmap.
+    data[i] gives node at position i.
+    """
+
+    def __getitem__(self, i: int) -> int:
+        return int(self.data[i])
+
+    def __iter__(self):
+        return iter(self.data)
+
+    def __len__(self):
+        return len(self.data)
+
+
+class LevUpComputed(Computed):
+    """C.levUp: embedders of each node.
+
+    Supports CSRArray backend for mmap.
+    """
+
+    def __getitem__(self, n: int):
+        from .csr import CSRArray
+
+        if isinstance(self.data, CSRArray):
+            return self.data.get_as_tuple(n - 1)
+        return self.data[n - 1]
+
+
+class LevDownComputed(Computed):
+    """C.levDown: embeddees of each node.
+
+    Supports CSRArray backend for mmap.
+    Only for non-slot nodes, so index is n - maxSlot - 1.
+    """
+
+    def __getitem__(self, n: int):
+        from .csr import CSRArray
+
+        maxSlot = self.api.F.otype.maxSlot
+        idx = n - maxSlot - 1
+        if idx < 0:
+            return ()  # Slots have no embeddees
+
+        if isinstance(self.data, CSRArray):
+            return self.data.get_as_tuple(idx)
+        return self.data[idx]
+
+
+class LevelsComputed(Computed):
+    """C.levels: node type hierarchy data."""
+
+    pass
+
+
+class BoundaryComputed(Computed):
+    """C.boundary: first/last slot boundary data."""
+
+    pass

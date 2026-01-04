@@ -1,15 +1,7 @@
 import array
-import gc
-import pickle
-
-# from pickletools import optimize
-import gzip
 import collections
 import time
 from cfabric.core.parameters import (
-    PACK_VERSION,
-    PICKLE_PROTOCOL,
-    GZIP_LEVEL,
     OTYPE,
     OSLOTS,
     OTEXT,
@@ -28,7 +20,6 @@ from cfabric.core.files import (
     fileOpen,
     unexpanduser as ux,
     fileExists,
-    fileRemove,
     dirMake,
     splitExt,
     splitPath,
@@ -70,8 +61,6 @@ class Data:
         self.dirName = dirName
         self.fileName = fileName
         self.extension = extension
-        self.binDir = f"{dirName}/.tf/{PACK_VERSION}"
-        self.binPath = f"{self.binDir}/{self.fileName}.tfx"
         self.edgeValues = edgeValues
         self.isEdge = isEdge
         self.isConfig = isConfig
@@ -84,11 +73,13 @@ class Data:
         self.dataType = "str"
 
     def load(self, metaOnly=False, silent=SILENT_D, _withGc=False):
-        """Load a feature.
+        """Load a feature from .tf source file.
+
+        For faster loading, use TF.load_cfm() which loads from pre-compiled
+        memory-mapped .cfm format instead.
 
         _withGc: boolean, optional False
-            If False, it disables the Python garbage collector before
-            loading features. Used to experiment with performance.
+            Ignored, kept for API compatibility.
         """
 
         silent = silentConvert(silent)
@@ -103,7 +94,6 @@ class Data:
         setSilent(silent)
         indent(level=True, reset=True)
         origTime = self._getModified()
-        binTime = self._getModified(bin=True)
         sourceRep = (
             ", ".join(
                 dep.fileName for dep in self.dependencies if isinstance(dep, Data)
@@ -122,65 +112,33 @@ class Data:
             actionRep = "E"
             good = False
         elif self.dataLoaded and (
-            self.isConfig
-            or (
-                (not origTime or self.dataLoaded >= origTime)
-                and (not binTime or self.dataLoaded >= binTime)
-            )
+            self.isConfig or (not origTime or self.dataLoaded >= origTime)
         ):
             actionRep = "="  # loaded and up to date
-        elif not origTime and not binTime:
-            actionRep = "X"  # no source and no binary present
+        elif not origTime:
+            actionRep = "X"  # no source present
             good = False
         else:
             try:
-                if not origTime:
-                    actionRep = "b"
-                    good = self._readDataBin(_withGc=_withGc)
-                    if not good:
-                        actionRep = "X"  # no source and no readable binary present
-                elif not binTime or origTime > binTime:
-                    actionRep = "C" if self.method else "T"
-                    good = (
-                        self._compute(metaOnly=metaOnly)
-                        if self.method
-                        else self._readTf(metaOnly=metaOnly)
-                    )
-                    if good:
-                        if self.isConfig or metaOnly:
-                            actionRep = "M"
-                        else:
-                            self._writeDataBin(_withGc=_withGc)
-                else:
-                    actionRep = "B"
-                    good = True if self.method else self._readTf(metaOnly=True)
-                    if good:
-                        if self.isConfig or metaOnly:
-                            actionRep = "M"
-                        else:
-                            good = self._readDataBin(_withGc=_withGc)
-                            if not good:
-                                actionRep = "C" if self.method else "T"
-                                good = (
-                                    self._compute(metaOnly=metaOnly)
-                                    if self.method
-                                    else self._readTf(metaOnly=metaOnly)
-                                )
-                                if good:
-                                    self._writeDataBin(_withGc=_withGc)
+                actionRep = "C" if self.method else "T"
+                good = (
+                    self._compute(metaOnly=metaOnly)
+                    if self.method
+                    else self._readTf(metaOnly=metaOnly)
+                )
+                if good:
+                    if self.isConfig or metaOnly:
+                        actionRep = "M"
+                    else:
+                        # Only set dataLoaded when actually loading data
+                        self.dataLoaded = time.time()
             except MemoryError:
                 console(MEM_MSG)
                 good = False
             except Exception as e:
                 console(f"{FATAL_MSG}: {e}")
                 good = False
-        if self.isConfig:
-            self.cleanDataBin()
         if good:
-            if actionRep != "=" and not (
-                actionRep == "M" or (actionRep == "B" and self.method)
-            ):
-                pass
             info(
                 msgFormat.format(actionRep, self.fileName, sourceRep),
                 cache=1 if actionRep in "CT" else -1,
@@ -654,96 +612,15 @@ class Data:
                         )
         return True
 
-    def _readDataBin(self, _withGc=False):
-        """Read binary feature data.
-
-        Parameters
-        ----------
-        _withGc: boolean, optional False
-            If False, it disables the Python garbage collector before
-            loading features. Used to experiment with performance.
-        """
-        tmObj = self.tmObj
-        error = tmObj.error
-
-        if not fileExists(self.binPath):
-            error(f'TF reading: feature file "{self.binPath}" does not exist')
-            return False
-
-        if not _withGc:
-            gc.disable()
-
-        good = True
-
-        try:
-            with gzip.open(self.binPath, mode="rb") as f:
-                self.data = pickle.load(f)
-            good = True
-        except Exception:
-            good = False
-        finally:
-            if not _withGc:
-                gc.enable()
-        self.dataLoaded = time.time()
-        return good
-
-    def cleanDataBin(self):
-        fileRemove(self.binPath)
-
-    def _writeDataBin(self, _withGc=False):
-        """Write binary feature data.
-
-        Parameters
-        ----------
-        _withGc: boolean, optional False
-            If False, it disables the Python garbage collector before
-            loading features. Used to experiment with performance.
-        """
-        tmObj = self.tmObj
-        error = tmObj.error
-
-        if not _withGc:
-            gc.disable()
-
-        good = True
-        dirMake(self.binDir)
-
-        try:
-            with gzip.open(self.binPath, mode="wb", compresslevel=GZIP_LEVEL) as f:
-                # f.write(optimize(pickle.dumps(self.data, protocol=PICKLE_PROTOCOL)))
-                f.write(pickle.dumps(self.data, protocol=PICKLE_PROTOCOL))
-        except Exception as e:
-            error(f'Cannot write to file "{self.binPath}" because: {str(e)}')
-            self.cleanDataBin()
-            good = False
-        finally:
-            if not _withGc:
-                gc.enable()
-        self.dataLoaded = time.time()
-        return good
-
-    def _getModified(self, bin=False):
-        if bin:
-            return mTime(self.binPath) if fileExists(self.binPath) else None
+    def _getModified(self):
+        """Get the modification time of the source file."""
+        if self.method:
+            depsInfo = [
+                dep._getModified()
+                for dep in self.dependencies
+                if isinstance(dep, Data)
+            ]
+            depsModifieds = [d for d in depsInfo if d is not None]
+            return None if len(depsModifieds) == 0 else max(depsModifieds)
         else:
-            if self.method:
-                depsInfo = [
-                    dep._getModified()
-                    for dep in self.dependencies
-                    if isinstance(dep, Data)
-                ]
-                depsModifieds = [d for d in depsInfo if d is not None]
-                depsModified = None if len(depsModifieds) == 0 else max(depsModifieds)
-                if depsModified is not None:
-                    return depsModified
-                elif fileExists(self.binPath):
-                    return mTime(self.binPath)
-                else:
-                    return None
-            else:
-                if fileExists(self.path):
-                    return mTime(self.path)
-                elif fileExists(self.binPath):
-                    return mTime(self.binPath)
-                else:
-                    return None
+            return mTime(self.path) if fileExists(self.path) else None

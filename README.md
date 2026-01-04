@@ -21,10 +21,10 @@ pip install context-fabric-core
 ## Quick Start
 
 ```python
-from cfabric.core import FabricCore
+from cfabric.core import Fabric
 
 # Load a dataset
-TF = FabricCore(locations='path/to/data')
+TF = Fabric(locations='path/to/data')
 api = TF.load('feature1 feature2')
 
 # Navigate nodes

@@ -685,6 +685,74 @@ def sections(info, error, otype, oslots, otext, levUp, levDown, levels, *sFeats)
     return dict(sec1=sec1, sec2=sec2, seqFromNode=seqFromNode, nodeFromSeq=nodeFromSeq)
 
 
+def sectionsFromApi(api, sectionTypes, sectionFeats):
+    """Compute sections data using API methods.
+
+    This is an alternative to `sections()` that works with the high-level API
+    rather than raw data structures. Used when loading from .cfm format.
+
+    Parameters
+    ----------
+    api : Api
+        The TF/CF API object with F, L, Fs attributes
+    sectionTypes : list
+        Section type names, e.g. ['book', 'chapter', 'verse']
+    sectionFeats : list
+        Section feature names, e.g. ['book', 'chapter', 'verse']
+
+    Returns
+    -------
+    dict
+        Same structure as sections(): {sec1, sec2, seqFromNode, nodeFromSeq}
+    """
+    if len(sectionTypes) < 2 or len(sectionFeats) < 2:
+        return None
+
+    sec1 = {}
+    sec2 = {}
+    seqFromNode = {}
+    nodeFromSeq = {}
+
+    F = api.F
+    L = api.L
+    Fs = api.Fs
+
+    feat1 = Fs(sectionFeats[1])
+    feat2 = Fs(sectionFeats[2]) if len(sectionFeats) > 2 else None
+
+    # Index level-1 sections (e.g., chapters)
+    for n1 in F.otype.s(sectionTypes[1]):
+        n0_list = [x for x in L.u(n1) if F.otype.v(x) == sectionTypes[0]]
+        if not n0_list:
+            continue
+        n0 = n0_list[0]
+        heading1 = feat1.v(n1)
+
+        if n0 not in sec1:
+            sec1[n0] = {}
+        if heading1 not in sec1[n0]:
+            sec1[n0][heading1] = n1
+
+    # Index level-2 sections (e.g., verses) if present
+    if len(sectionTypes) >= 3 and feat2 is not None:
+        for n2 in F.otype.s(sectionTypes[2]):
+            embedders = L.u(n2)
+            n0_list = [x for x in embedders if F.otype.v(x) == sectionTypes[0]]
+            n1_list = [x for x in embedders if F.otype.v(x) == sectionTypes[1]]
+
+            if not n0_list or not n1_list:
+                continue
+
+            n0 = n0_list[0]
+            n1 = n1_list[0]
+            heading1 = feat1.v(n1)
+            heading2 = feat2.v(n2)
+
+            sec2.setdefault(n0, {}).setdefault(heading1, {})[heading2] = n2
+
+    return dict(sec1=sec1, sec2=sec2, seqFromNode=seqFromNode, nodeFromSeq=nodeFromSeq)
+
+
 def structure(info, error, otype, oslots, otext, rank, levUp, *sFeats):
     """Computes structure data.
 

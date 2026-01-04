@@ -1,24 +1,21 @@
 """
-# `FabricCore`
+# Fabric
 
-The main class that works the core API is `tf.fabric.Fabric`.
-In this module we define `FabricCore`, which contains most of the
-functionality of `Fabric`.
+The main class that works the core API.
 
-It does not contain the volume support.
-Volume support requires `tf.volumes.extract` and `tf.volumes.collect` which
-need to load and save TF datasets, and loading and saving are Fabric
-functionalities.
-
-Hence a Fabric with volume support would lead to circular imports.
-By leaving out volume support, volume support can use `FabricCore` instead of Fabric.
+This module defines `Fabric`, which provides:
+- Locating and loading TF feature files
+- Compiling to and loading from .cfm format
+- Managing the core API (F, E, L, T, S, N, C)
 """
 
 import collections
 from itertools import chain
 from typing import Dict, Union, Set
 
-from cfabric.core.parameters import BANNER, VERSION, OTYPE, OSLOTS, OTEXT
+from pathlib import Path
+
+from cfabric.core.parameters import BANNER, VERSION, OTYPE, OSLOTS, OTEXT, CFM_VERSION
 from cfabric.core.data import Data, MEM_MSG
 from cfabric.core.helpers import (
     itemize,
@@ -48,9 +45,20 @@ from cfabric.core.prepare import (
     boundary,
     characters,
     sections,
+    sectionsFromApi,
     structure,
 )
-from cfabric.core.computed import Computed
+from cfabric.core.computed import (
+    Computed,
+    RankComputed,
+    OrderComputed,
+    LevUpComputed,
+    LevDownComputed,
+)
+from cfabric.core.mmap import MmapManager
+from cfabric.core.compile import Compiler, compile_corpus
+from cfabric.core.csr import CSRArray
+from cfabric.core.strings import StringPool, IntFeatureArray
 from cfabric.core.nodefeature import NodeFeature
 from cfabric.core.edgefeature import EdgeFeature
 from cfabric.core.otypefeature import OtypeFeature
@@ -128,7 +136,7 @@ in `tf.core.prepare`.
 KIND = dict(__sections__="section", __structure__="structure")
 
 
-class FabricCore:
+class Fabric:
     """Initialize the core API for a corpus.
 
     Top level management of
@@ -281,6 +289,9 @@ class FabricCore:
     def load(self, features, add=False, silent=SILENT_D):
         """Loads features from disk into RAM memory.
 
+        Automatically uses memory-mapped .cfm format when available for faster
+        loading and reduced memory usage. Falls back to .tf format otherwise.
+
         Parameters
         ----------
 
@@ -311,6 +322,7 @@ class FabricCore:
         setSilent = tmObj.setSilent
         indent = tmObj.indent
         debug = tmObj.debug
+        info = tmObj.info
         warning = tmObj.warning
         error = tmObj.error
         cache = tmObj.cache
@@ -320,6 +332,26 @@ class FabricCore:
         wasSilent = isSilent()
         setSilent(silent)
         indent(level=0, reset=True)
+
+        # Try to load from .cfm format first (if not adding to existing API)
+        if not add:
+            cfm_path = self._detect_cfm()
+            if cfm_path is not None:
+                info(f"Loading from {cfm_path}")
+                try:
+                    mmap_mgr = MmapManager(cfm_path)
+                    api = self._makeApiFromCfm(mmap_mgr)
+                    if api is not None:
+                        self.api = api
+                        self._loaded_from_cfm = True
+                        setattr(self, "isLoaded", self.api.isLoaded)
+                        indent(level=0)
+                        info("All features loaded from .cfm format")
+                        setSilent(wasSilent)
+                        return api
+                except Exception as e:
+                    debug(f".cfm load failed, falling back to .tf: {e}")
+
         self.sectionsOK = True
         self.structureOK = True
         self.good = True
@@ -431,6 +463,9 @@ class FabricCore:
             else:
                 try:
                     result = self._makeApi()
+                    # Auto-compile to .cfm for faster subsequent loads
+                    if result:
+                        self.compile(silent=silent)
                 except MemoryError:
                     console(MEM_MSG)
                     result = False
@@ -528,35 +563,12 @@ class FabricCore:
 
         silent = silentConvert(silent)
         api = self.load("", silent=silent)
-        allFeatures = self.explore(silent=silent, show=True)
-        loadableFeatures = allFeatures["nodes"] + allFeatures["edges"]
-        self.load(loadableFeatures, add=True, silent=silent)
+        # If loaded from cfm, all features are already loaded
+        if not getattr(self, '_loaded_from_cfm', False):
+            allFeatures = self.explore(silent=silent, show=True)
+            loadableFeatures = allFeatures["nodes"] + allFeatures["edges"]
+            self.load(loadableFeatures, add=True, silent=silent)
         return api
-
-    def clearCache(self):
-        """Clears the cache of compiled TF data.
-
-        TF pre-computes data for you, so that it can be loaded faster.
-        If the original data is updated, TF detects it,
-        and will recompute that data.
-
-        But there are cases, when the algorithms of TF have changed,
-        without any changes in the data, where you might want to clear the cache
-        of pre-computed results.
-
-        Calling this function just does it, and it is equivalent with manually removing
-        all `.tfx` files inside the hidden `.tf` directory inside your dataset.
-
-        !!! hint "No need to load"
-            It is not needed to execute a `TF.load()` first.
-
-        See Also
-        --------
-        tf.clean
-        """
-
-        for fName, fObj in self.features.items():
-            fObj.cleanDataBin()
 
     def save(
         self,
@@ -965,7 +977,17 @@ class FabricCore:
                             for (fn, dep2) in self.precomputeList
                             if not dep2 == 2 or ok
                         ]:
-                            setattr(ap, feat, Computed(api, fObj.data))
+                            # Use specialized computed classes for mmap compatibility
+                            if feat == 'rank':
+                                setattr(ap, feat, RankComputed(api, fObj.data))
+                            elif feat == 'order':
+                                setattr(ap, feat, OrderComputed(api, fObj.data))
+                            elif feat == 'levUp':
+                                setattr(ap, feat, LevUpComputed(api, fObj.data))
+                            elif feat == 'levDown':
+                                setattr(ap, feat, LevDownComputed(api, fObj.data))
+                            else:
+                                setattr(ap, feat, Computed(api, fObj.data))
                         else:
                             fObj.unload()
                             if hasattr(ap, feat):
@@ -1023,7 +1045,7 @@ class FabricCore:
 
         for fName in self.features:
             fObj = self.features[fName]
-            if fObj.dataLoaded and not fObj.isConfig:
+            if fObj.dataLoaded and not fObj.isConfig and fObj.data is not None:
                 if not fObj.method:
                     if fName in requestedSet | self.textFeatures:
                         if fName in (OTYPE, OSLOTS, OTEXT):
@@ -1051,3 +1073,286 @@ class FabricCore:
                         fObj.unload()
         indent(level=0)
         debug("All additional features loaded - for details use TF.isLoaded()")
+
+    def _detect_cfm(self):
+        """Check if .cfm directory exists for the corpus.
+
+        Returns
+        -------
+        Path | None
+            Path to the .cfm/{CFM_VERSION}/ directory if it exists, else None.
+        """
+        for loc in self.locations:
+            for mod in self.modules:
+                cfm_path = Path(loc) / mod / '.cfm' / CFM_VERSION
+                if (cfm_path / 'meta.json').exists():
+                    return cfm_path
+        return None
+
+    def compile(self, output_dir=None, silent=SILENT_D):
+        """Compile .tf files to .cfm mmap format.
+
+        Compiles Text-Fabric source files into the Context Fabric memory-mapped
+        format for faster loading and shared memory across processes.
+
+        Parameters
+        ----------
+        output_dir : str, optional
+            Output directory for .cfm files. Defaults to {source}/.cfm/{CFM_VERSION}/
+        silent : str
+            Silence level
+
+        Returns
+        -------
+        bool
+            True if compilation succeeded
+        """
+        silent = silentConvert(silent)
+        tmObj = self.tmObj
+        setSilent = tmObj.setSilent
+        isSilent = tmObj.isSilent
+
+        wasSilent = isSilent()
+        setSilent(silent)
+
+        # Use the first location with the last module as source
+        source_dir = (
+            self.locations[-1] + "/" + self.modules[-1]
+            if self.modules and self.modules[-1]
+            else self.locations[-1]
+        )
+        compiler = Compiler(source_dir, self.tmObj)
+        result = compiler.compile(output_dir)
+
+        setSilent(wasSilent)
+        return result
+
+    def _makeApiFromCfm(self, mmap_mgr):
+        """Build API from memory-mapped .cfm data.
+
+        Parameters
+        ----------
+        mmap_mgr : MmapManager
+            Manager for memory-mapped arrays
+
+        Returns
+        -------
+        Api | None
+            A new Api if built successfully, else None.
+        """
+        tmObj = self.tmObj
+        info = tmObj.info
+        debug = tmObj.debug
+
+        api = Api(self)
+        api.featuresOnly = False
+
+        max_slot = mmap_mgr.max_slot
+        max_node = mmap_mgr.max_node
+        slot_type = mmap_mgr.slot_type
+        node_types = mmap_mgr.node_types
+
+        # Load warp features
+        debug("  Loading otype...")
+        otype_arr = mmap_mgr.get_array('warp', 'otype')
+        type_list_raw = mmap_mgr.get_json('warp', 'otype_types')
+
+        # Package type_list as dict with metadata for OtypeFeature mmap mode
+        type_list_dict = {
+            'types': type_list_raw,
+            'maxSlot': max_slot,
+            'maxNode': max_node,
+            'slotType': slot_type,
+        }
+
+        otype_meta = self._feature_meta_from_cfm(mmap_mgr, OTYPE)
+        otype_feature = OtypeFeature(api, otype_meta, otype_arr, type_list_dict)
+        setattr(api.F, OTYPE, otype_feature)
+
+        debug("  Loading oslots...")
+        oslots_csr = mmap_mgr.get_csr('warp', 'oslots')
+        oslots_meta = self._feature_meta_from_cfm(mmap_mgr, OSLOTS)
+        oslots_feature = OslotsFeature(
+            api, oslots_meta, oslots_csr, maxSlot=max_slot, maxNode=max_node
+        )
+        setattr(api.E, OSLOTS, oslots_feature)
+
+        # Load computed data
+        debug("  Loading computed data...")
+        self._loadComputedFromCfm(api, mmap_mgr)
+
+        # Setup otype support dict (needed for otype.s())
+        self._setupOtypeSupport(otype_feature, otype_arr, type_list_raw, max_slot, max_node)
+
+        # Load node features
+        meta = mmap_mgr.meta
+        node_feature_names = meta.get('features', {}).get('node', [])
+        for fname in node_feature_names:
+            debug(f"  Loading feature {fname}...")
+            self._loadNodeFeatureFromCfm(api, mmap_mgr, fname)
+
+        # Load edge features
+        edge_feature_names = meta.get('features', {}).get('edge', [])
+        for fname in edge_feature_names:
+            debug(f"  Loading edge {fname}...")
+            self._loadEdgeFeatureFromCfm(api, mmap_mgr, fname)
+
+        # Setup otext-related attributes from meta.json
+        otextMeta = meta.get('otext', {})
+        self.sectionFeats = itemize(otextMeta.get("sectionFeatures", ""), ",")
+        self.sectionTypes = itemize(otextMeta.get("sectionTypes", ""), ",")
+        self.structureFeats = itemize(otextMeta.get("structureFeatures", ""), ",")
+        self.structureTypes = itemize(otextMeta.get("structureTypes", ""), ",")
+        (self.cformats, self.formatFeats) = collectFormats(otextMeta)
+        self.textFeatures = set()
+        self.sectionsOK = len(self.sectionTypes) > 0 and len(self.sectionFeats) > 0
+        self.structureOK = len(self.structureTypes) > 0 and len(self.structureFeats) > 0
+
+        # Setup sectionFeatsWithLanguage (include primary section feat and language variants)
+        if self.sectionFeats:
+            primary_feat = self.sectionFeats[0]
+            self.sectionFeatsWithLanguage = tuple(
+                f for f in node_feature_names
+                if f == primary_feat or f.startswith(f"{primary_feat}@")
+            )
+        else:
+            self.sectionFeatsWithLanguage = ()
+
+        # Setup remaining API components
+        addOtype(api)
+        addNodes(api)
+        addLocality(api)
+
+        # Compute sections (needs L.u() from locality)
+        if self.sectionsOK:
+            sections_data = sectionsFromApi(api, self.sectionTypes, self.sectionFeats)
+            if sections_data:
+                setattr(api.C, 'sections', Computed(api, sections_data))
+
+        addText(api)
+        addSearch(api, tmObj.isSilent())
+
+        return api
+
+    def _feature_meta_from_cfm(self, mmap_mgr, fname):
+        """Get feature metadata from .cfm directory."""
+        try:
+            return mmap_mgr.get_json('features', f'{fname}_meta')
+        except FileNotFoundError:
+            return {}
+
+    def _loadComputedFromCfm(self, api, mmap_mgr):
+        """Load computed data (C.*) from .cfm format."""
+        computed_dir = mmap_mgr.cfm_path / 'computed'
+
+        # Load rank
+        rank_arr = mmap_mgr.get_array('computed', 'rank')
+        setattr(api.C, 'rank', RankComputed(api, rank_arr))
+
+        # Load order
+        order_arr = mmap_mgr.get_array('computed', 'order')
+        setattr(api.C, 'order', OrderComputed(api, order_arr))
+
+        # Load levUp (CSR)
+        levup_csr = mmap_mgr.get_csr('computed', 'levup')
+        setattr(api.C, 'levUp', LevUpComputed(api, levup_csr))
+
+        # Load levDown (CSR)
+        levdown_csr = mmap_mgr.get_csr('computed', 'levdown')
+        setattr(api.C, 'levDown', LevDownComputed(api, levdown_csr))
+
+        # Load levels (JSON)
+        try:
+            levels_data = mmap_mgr.get_json('computed', 'levels')
+            levels_tuple = tuple(
+                (d['type'], d['avgSlots'], d['minNode'], d['maxNode'])
+                for d in levels_data
+            )
+            setattr(api.C, 'levels', Computed(api, levels_tuple))
+        except FileNotFoundError:
+            pass
+
+        # Load boundary (CSR arrays)
+        try:
+            first_csr = mmap_mgr.get_csr('computed', 'boundary_first')
+            last_csr = mmap_mgr.get_csr('computed', 'boundary_last')
+            boundary_data = (first_csr, last_csr)
+            setattr(api.C, 'boundary', Computed(api, boundary_data))
+        except FileNotFoundError:
+            pass
+
+    def _setupOtypeSupport(self, otype_feature, otype_arr, type_list, max_slot, max_node):
+        """Setup the support dict for otype.s() method."""
+        import numpy as np
+
+        support = {}
+
+        # Slot type support
+        support[otype_feature.slotType] = (1, max_slot)
+
+        # Non-slot type supports
+        # Find min/max node for each type
+        type_mins = {}
+        type_maxs = {}
+
+        for i, type_idx in enumerate(otype_arr):
+            node = max_slot + 1 + i
+            type_name = type_list[type_idx]
+            if type_name not in type_mins:
+                type_mins[type_name] = node
+            type_maxs[type_name] = node
+
+        for type_name in type_mins:
+            support[type_name] = (type_mins[type_name], type_maxs[type_name])
+
+        otype_feature.support = support
+
+    def _loadNodeFeatureFromCfm(self, api, mmap_mgr, fname):
+        """Load a node feature from .cfm format."""
+        features_dir = mmap_mgr.cfm_path / 'features'
+
+        # Get metadata
+        try:
+            meta = mmap_mgr.get_json('features', f'{fname}_meta')
+        except FileNotFoundError:
+            meta = {}
+
+        value_type = meta.get('value_type', 'str')
+
+        if value_type == 'int':
+            # Load integer feature
+            int_arr = IntFeatureArray.load(str(features_dir / f'{fname}.npy'), mmap_mode='r')
+            feature = NodeFeature(api, meta, int_arr)
+        else:
+            # Load string feature
+            str_pool = mmap_mgr.get_string_pool(fname)
+            feature = NodeFeature(api, meta, str_pool)
+
+        setattr(api.F, fname, feature)
+
+    def _loadEdgeFeatureFromCfm(self, api, mmap_mgr, fname):
+        """Load an edge feature from .cfm format."""
+        from .csr import CSRArrayWithValues
+
+        edges_dir = mmap_mgr.cfm_path / 'edges'
+
+        # Get metadata
+        try:
+            meta = mmap_mgr.get_json('edges', f'{fname}_meta')
+        except FileNotFoundError:
+            meta = {}
+
+        has_values = meta.get('has_values', False)
+
+        if has_values:
+            # Load edge with values (CSRArrayWithValues)
+            csr = CSRArrayWithValues.load(str(edges_dir / fname), mmap_mode='r')
+            inv_csr = CSRArrayWithValues.load(str(edges_dir / f'{fname}_inv'), mmap_mode='r')
+            feature = EdgeFeature(api, meta, csr, has_values, dataInv=inv_csr)
+        else:
+            # Load edge without values (CSRArray)
+            csr = CSRArray.load(str(edges_dir / fname), mmap_mode='r')
+            inv_csr = CSRArray.load(str(edges_dir / f'{fname}_inv'), mmap_mode='r')
+            feature = EdgeFeature(api, meta, csr, has_values, dataInv=inv_csr)
+
+        setattr(api.E, fname, feature)

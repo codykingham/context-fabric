@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Initial release of Context-Fabric core package
-- FabricCore class for corpus initialization and feature loading
+- Fabric class for corpus initialization and feature loading
 - Node and edge feature APIs
 - Text retrieval and section navigation
 - Search module with query syntax parsing

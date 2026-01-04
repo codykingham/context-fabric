@@ -1,4 +1,4 @@
-"""Integration tests for FabricCore loading.
+"""Integration tests for Fabric loading.
 
 Tests the full data loading pipeline with real TF files.
 """
@@ -7,8 +7,8 @@ import pytest
 from pathlib import Path
 
 
-class TestFabricCoreLoading:
-    """Tests for FabricCore initialization and loading."""
+class TestFabricLoading:
+    """Tests for Fabric initialization and loading."""
 
     def test_load_all_features(self, loaded_api):
         """loadAll() should load all features and return API."""
@@ -37,14 +37,14 @@ class TestFabricCoreLoading:
         assert hasattr(loaded_api, "S")  # Search
 
 
-class TestFabricCoreExplore:
-    """Tests for FabricCore.explore() method."""
+class TestFabricExplore:
+    """Tests for Fabric.explore() method."""
 
     def test_explore_returns_categories(self, mini_corpus_path):
         """explore() should return dict with feature categories."""
-        from cfabric.core.fabric import FabricCore
+        from cfabric.core.fabric import Fabric
 
-        TF = FabricCore(locations=mini_corpus_path, silent="deep")
+        TF = Fabric(locations=mini_corpus_path, silent="deep")
         result = TF.explore(silent="deep", show=True)
 
         assert isinstance(result, dict)
@@ -53,9 +53,9 @@ class TestFabricCoreExplore:
 
     def test_explore_lists_features(self, mini_corpus_path):
         """explore() should list available features."""
-        from cfabric.core.fabric import FabricCore
+        from cfabric.core.fabric import Fabric
 
-        TF = FabricCore(locations=mini_corpus_path, silent="deep")
+        TF = Fabric(locations=mini_corpus_path, silent="deep")
         result = TF.explore(silent="deep", show=True)
 
         # Should find node features
@@ -67,14 +67,14 @@ class TestFabricCoreExplore:
         assert "oslots" in result["edges"]
 
 
-class TestFabricCoreLoadSpecific:
+class TestFabricLoadSpecific:
     """Tests for loading specific features."""
 
     def test_load_specific_features(self, mini_corpus_path):
         """load() should load only specified features."""
-        from cfabric.core.fabric import FabricCore
+        from cfabric.core.fabric import Fabric
 
-        TF = FabricCore(locations=mini_corpus_path, silent="deep")
+        TF = Fabric(locations=mini_corpus_path, silent="deep")
         api = TF.load("word", silent="deep")
 
         assert api is not False
@@ -82,9 +82,9 @@ class TestFabricCoreLoadSpecific:
 
     def test_load_with_add(self, mini_corpus_path):
         """load(add=True) should add features to existing API."""
-        from cfabric.core.fabric import FabricCore
+        from cfabric.core.fabric import Fabric
 
-        TF = FabricCore(locations=mini_corpus_path, silent="deep")
+        TF = Fabric(locations=mini_corpus_path, silent="deep")
         api = TF.load("word", silent="deep")
         assert hasattr(api.F, "word")
 
@@ -96,29 +96,29 @@ class TestFabricCoreLoadSpecific:
         assert hasattr(api.F, "pos")
 
 
-class TestFabricCoreErrors:
+class TestFabricErrors:
     """Tests for error handling during loading."""
 
     def test_load_nonexistent_path(self, tmp_path):
         """Loading from non-existent path should handle gracefully."""
-        from cfabric.core.fabric import FabricCore
+        from cfabric.core.fabric import Fabric
 
         nonexistent = str(tmp_path / "nonexistent")
-        TF = FabricCore(locations=nonexistent, silent="deep")
+        TF = Fabric(locations=nonexistent, silent="deep")
         api = TF.loadAll(silent="deep")
 
         # Should return False when loading fails (no features found)
-        # Note: FabricCore may return False or an API with no features
+        # Note: Fabric may return False or an API with no features
         assert api is False or (api is not None and not hasattr(api.F, "otype"))
 
     def test_load_empty_directory(self, tmp_path):
         """Loading from empty directory should handle gracefully."""
-        from cfabric.core.fabric import FabricCore
+        from cfabric.core.fabric import Fabric
 
         empty_dir = tmp_path / "empty"
         empty_dir.mkdir()
 
-        TF = FabricCore(locations=str(empty_dir), silent="deep")
+        TF = Fabric(locations=str(empty_dir), silent="deep")
         api = TF.loadAll(silent="deep")
 
         # Should return False when no features found

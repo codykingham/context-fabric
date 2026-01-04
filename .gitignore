@@ -45,6 +45,7 @@ dist/
 
 # TF-specific
 .tf/
+.cfm/
 .ipynb_checkpoints/
 
 # IDE / Editor
@@ -63,3 +64,6 @@ env/
 .coverage
 htmlcov/
 .tox/
+
+# Others
+.private

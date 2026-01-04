@@ -18,22 +18,6 @@ NAME = "Context-Fabric"
 
 BANNER = f"This is {NAME} {VERSION}"
 
-PACK_VERSION = "4"
-"""Data serialization version.
-
-Plain text feature files will be compressed to zipped, pickled data structures
-that load much faster.
-
-These methods evolve, sometimes in incompatible ways.
-In those cases we bump this version number.
-That will cause CF not to use compressed files that have been compressed by
-older, incompatible methods.
-Instead, CF will produce freshly compressed data files.
-
-The compressed data files are stored in a directory `.tf/{PVN}/` next
-to the original `tf` files, where `{PVN}` is the package version number.
-"""
-
 API_VERSION = 3
 """CF API version.
 
@@ -82,12 +66,6 @@ The features `otype` and `oslots` are crucial to every CF dataset.
 Without them, a dataset is not a CF dataset, although it could still be a
 CF data module.
 """
-
-GZIP_LEVEL = 2
-"""Compression level when compressing CF files."""
-
-PICKLE_PROTOCOL = 4
-"""Pickle protocol level when pickling CF files."""
 
 ORG = "codykingham"
 """GitHub organization or GitLab group."""
@@ -159,3 +137,36 @@ TRY_LIMIT_TO = 40
 
 SEARCH_FAIL_FACTOR = 4
 """Limits fetching of search results to this times maxNode (corpus dependent)."""
+
+# ============================================================================
+# CFM (Context Fabric Mmap) Format Constants
+# ============================================================================
+
+CFM_VERSION = "1"
+"""Memory-mapped format version.
+
+The .cfm format stores features as memory-mapped numpy arrays for:
+- Shared memory across async workers
+- Reduced memory footprint
+- Near-zero startup time after initial compilation
+"""
+
+# Numpy dtypes for mmap format
+NODE_DTYPE = 'uint32'
+"""Dtype for node references."""
+
+RANK_DTYPE = 'uint32'
+"""Dtype for rank/order arrays."""
+
+INDEX_DTYPE = 'uint32'
+"""Dtype for CSR indptr arrays."""
+
+TYPE_DTYPE = 'uint8'
+"""Dtype for node type indices (supports up to 255 types)."""
+
+# Sentinel values for missing data
+MISSING_INT = -1
+"""Sentinel for missing integer feature values."""
+
+MISSING_STR_INDEX = 0xFFFFFFFF
+"""Sentinel for missing string feature indices."""

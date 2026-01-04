@@ -19,11 +19,16 @@ a dictionary underneath.
 
 But you can still iterate over the data of a feature as if it were a
 dictionary: `tf.core.edgefeature.EdgeFeature.items`
+
+This module supports two storage backends:
+- Legacy dict-based storage: dict[int, set|dict]
+- CSR mmap-based storage: CSRArray or CSRArrayWithValues
 """
 
 import collections
 
 from cfabric.core.helpers import makeInverse, makeInverseVal
+from cfabric.core.csr import CSRArray, CSRArrayWithValues
 
 
 class EdgeFeatures:
@@ -34,9 +39,15 @@ class EdgeFeature:
     """Provides access to (edge) feature data.
 
     For feature `fff` it is the result of `E.fff` or `Es('fff')`.
+
+    This class supports two storage backends:
+    - Legacy: dict-based storage (dict[int, set|dict])
+    - Mmap: CSRArray or CSRArrayWithValues for memory-mapped access
+
+    The backend is auto-detected based on the data type passed to __init__.
     """
 
-    def __init__(self, api, metaData, data, doValues):
+    def __init__(self, api, metaData, data, doValues, dataInv=None):
         self.api = api
         self.meta = metaData
         """Metadata of the feature.
@@ -46,14 +57,165 @@ class EdgeFeature:
         """
 
         self.doValues = doValues
-        if type(data) is tuple:
-            self.data = data[0]
-            self.dataInv = data[1]
+
+        # For mmap backend with int values, get sentinel for None values
+        # The sentinel is stored in metadata during compilation
+        self._none_sentinel = metaData.get('none_sentinel')
+
+        # Detect backend type
+        if isinstance(data, (CSRArray, CSRArrayWithValues)):
+            # CSR mmap backend
+            self._is_mmap = True
+            self._data = data
+            self._dataInv = dataInv  # Must be provided for mmap backend
+        elif isinstance(data, tuple) and len(data) == 2:
+            # Legacy tuple format: (data, dataInv)
+            self._is_mmap = False
+            self._data = data[0]
+            self._dataInv = data[1]
         else:
-            self.data = data
-            self.dataInv = (
-                makeInverseVal(self.data) if doValues else makeInverse(self.data)
+            # Legacy dict format
+            self._is_mmap = False
+            self._data = data
+            self._dataInv = (
+                makeInverseVal(self._data) if doValues else makeInverse(self._data)
             )
+
+    def _convert_sentinel_to_none(self, val):
+        """Convert sentinel value back to None for int edge values."""
+        if self._none_sentinel is not None and val == self._none_sentinel:
+            return None
+        return val
+
+    def _convert_dict_sentinels(self, d):
+        """Convert all sentinel values in a dict to None."""
+        if self._none_sentinel is None:
+            return d
+        return {k: (None if v == self._none_sentinel else v) for k, v in d.items()}
+
+    @property
+    def data(self):
+        """Get forward edge data.
+
+        For legacy backend, returns the dict directly.
+        For mmap backend, materializes CSR to dict (for backward compatibility).
+        """
+        if self._is_mmap:
+            return self._materialize_forward()
+        return self._data
+
+    @property
+    def dataInv(self):
+        """Get inverse edge data.
+
+        For legacy backend, returns the dict directly.
+        For mmap backend, materializes CSR to dict (for backward compatibility).
+        """
+        if self._is_mmap:
+            return self._materialize_inverse()
+        return self._dataInv
+
+    def _materialize_forward(self):
+        """Convert forward CSR data to dict format."""
+        result = {}
+        csr = self._data
+        for i in range(len(csr)):
+            n = i + 1  # 0-indexed CSR to 1-indexed nodes
+            if isinstance(csr, CSRArrayWithValues):
+                indices, values = csr[i]
+                if len(indices) > 0:
+                    d = dict(zip(indices.tolist(), values.tolist()))
+                    result[n] = self._convert_dict_sentinels(d)
+            else:
+                targets = csr[i]
+                if len(targets) > 0:
+                    result[n] = set(targets.tolist())
+        return result
+
+    def _materialize_inverse(self):
+        """Convert inverse CSR data to dict format."""
+        result = {}
+        csr = self._dataInv
+        if csr is None:
+            return result
+        for i in range(len(csr)):
+            n = i + 1  # 0-indexed CSR to 1-indexed nodes
+            if isinstance(csr, CSRArrayWithValues):
+                indices, values = csr[i]
+                if len(indices) > 0:
+                    d = dict(zip(indices.tolist(), values.tolist()))
+                    result[n] = self._convert_dict_sentinels(d)
+            else:
+                sources = csr[i]
+                if len(sources) > 0:
+                    result[n] = set(sources.tolist())
+        return result
+
+    def _has_forward_edges(self, n):
+        """Check if node n has any forward edges."""
+        if self._is_mmap:
+            i = n - 1
+            if i < 0 or i >= len(self._data):
+                return False
+            return self._data.indptr[i] < self._data.indptr[i + 1]
+        return n in self._data
+
+    def _has_inverse_edges(self, n):
+        """Check if node n has any inverse edges."""
+        if self._is_mmap:
+            if self._dataInv is None:
+                return False
+            i = n - 1
+            if i < 0 or i >= len(self._dataInv):
+                return False
+            return self._dataInv.indptr[i] < self._dataInv.indptr[i + 1]
+        return n in self._dataInv
+
+    def _get_forward_edges(self, n):
+        """Get raw forward edges for node n.
+
+        Returns:
+            For edges without values: set or numpy array of target nodes
+            For edges with values: dict with sentinel values converted to None
+        """
+        if self._is_mmap:
+            i = n - 1
+            if i < 0 or i >= len(self._data):
+                return None
+            if self._data.indptr[i] == self._data.indptr[i + 1]:
+                return None
+            if isinstance(self._data, CSRArrayWithValues):
+                indices, values = self._data[i]
+                result = dict(zip(indices, values))
+                # Convert sentinel values back to None
+                return self._convert_dict_sentinels(result)
+            else:
+                return self._data[i]
+        return self._data.get(n)
+
+    def _get_inverse_edges(self, n):
+        """Get raw inverse edges for node n.
+
+        Returns:
+            For edges without values: set or numpy array of source nodes
+            For edges with values: dict with sentinel values converted to None
+        """
+        if self._is_mmap:
+            if self._dataInv is None:
+                return None
+            i = n - 1
+            if i < 0 or i >= len(self._dataInv):
+                return None
+            if self._dataInv.indptr[i] == self._dataInv.indptr[i + 1]:
+                return None
+            if isinstance(self._dataInv, CSRArrayWithValues):
+                indices, values = self._dataInv[i]
+                result = dict(zip(indices, values))
+                # Convert sentinel values back to None
+                return self._convert_dict_sentinels(result)
+            else:
+                return self._dataInv[i]
+        return self._dataInv.get(n)
 
     def items(self):
         """A generator that yields the items of the feature, seen as a mapping.
@@ -67,8 +229,20 @@ class EdgeFeature:
            data = dict(E.fff.items())
 
         """
-
-        return self.data.items()
+        if self._is_mmap:
+            # Iterate over CSR data directly without full materialization
+            csr = self._data
+            for i in range(len(csr)):
+                if csr.indptr[i] < csr.indptr[i + 1]:
+                    n = i + 1  # 0-indexed CSR to 1-indexed nodes
+                    if isinstance(csr, CSRArrayWithValues):
+                        indices, values = csr[i]
+                        d = dict(zip(indices, values))
+                        yield (n, self._convert_dict_sentinels(d))
+                    else:
+                        yield (n, set(csr[i]))
+        else:
+            yield from self._data.items()
 
     def f(self, n):
         """Get outgoing edges *from* a node.
@@ -93,14 +267,22 @@ class EdgeFeature:
             If there are no edges from the node, the empty tuple is returned,
             rather than `None`.
         """
-
-        if n not in self.data:
+        edges = self._get_forward_edges(n)
+        if edges is None:
             return ()
+
+        # Handle empty edges (for legacy sets/dicts that might be empty)
+        if hasattr(edges, '__len__') and len(edges) == 0:
+            return ()
+
         Crank = self.api.C.rank.data
         if self.doValues:
-            return tuple(sorted(self.data[n].items(), key=lambda mv: Crank[mv[0] - 1]))
+            # edges is a dict for both backends
+            return tuple(sorted(edges.items(), key=lambda mv: Crank[mv[0] - 1]))
         else:
-            return tuple(sorted(self.data[n], key=lambda m: Crank[m - 1]))
+            # For mmap backend: edges is tuple
+            # For legacy backend: edges is set
+            return tuple(sorted(edges, key=lambda m: Crank[m - 1]))
 
     def t(self, n):
         """Get incoming edges *to* a node.
@@ -125,16 +307,22 @@ class EdgeFeature:
             If there are no edges to the node, the empty tuple is returned,
             rather than `None`.
         """
-
-        if n not in self.dataInv:
+        edges = self._get_inverse_edges(n)
+        if edges is None:
             return ()
+
+        # Handle empty edges (for legacy sets/dicts that might be empty)
+        if hasattr(edges, '__len__') and len(edges) == 0:
+            return ()
+
         Crank = self.api.C.rank.data
         if self.doValues:
-            return tuple(
-                sorted(self.dataInv[n].items(), key=lambda mv: Crank[mv[0] - 1])
-            )
+            # edges is a dict for both backends
+            return tuple(sorted(edges.items(), key=lambda mv: Crank[mv[0] - 1]))
         else:
-            return tuple(sorted(self.dataInv[n], key=lambda m: Crank[m - 1]))
+            # For mmap backend: edges is tuple
+            # For legacy backend: edges is set
+            return tuple(sorted(edges, key=lambda m: Crank[m - 1]))
 
     def b(self, n):
         """Query *both* incoming edges to, and outgoing edges from a node.
@@ -197,23 +385,38 @@ class EdgeFeature:
                 E.b(m) = (n, 6)
 
         """
+        has_forward = self._has_forward_edges(n)
+        has_inverse = self._has_inverse_edges(n)
 
-        if n not in self.data and n not in self.dataInv:
+        if not has_forward and not has_inverse:
             return ()
+
         Crank = self.api.C.rank.data
+
         if self.doValues:
             result = {}
-            if n in self.dataInv:
-                result.update(self.dataInv[n].items())
-            if n in self.data:
-                result.update(self.data[n].items())
+            # Inverse edges first, then forward edges (forward takes precedence)
+            inv_edges = self._get_inverse_edges(n)
+            if inv_edges:
+                result.update(inv_edges.items())
+            fwd_edges = self._get_forward_edges(n)
+            if fwd_edges:
+                result.update(fwd_edges.items())
             return tuple(sorted(result.items(), key=lambda mv: Crank[mv[0] - 1]))
         else:
             result = set()
-            if n in self.dataInv:
-                result |= self.dataInv[n]
-            if n in self.data:
-                result |= self.data[n]
+            inv_edges = self._get_inverse_edges(n)
+            if inv_edges is not None:
+                if self._is_mmap:
+                    result |= set(inv_edges.tolist())
+                else:
+                    result |= inv_edges
+            fwd_edges = self._get_forward_edges(n)
+            if fwd_edges is not None:
+                if self._is_mmap:
+                    result |= set(fwd_edges.tolist())
+                else:
+                    result |= fwd_edges
             return tuple(sorted(result, key=lambda m: Crank[m - 1]))
 
     def freqList(self, nodeTypesFrom=None, nodeTypesTo=None):
@@ -245,24 +448,23 @@ class EdgeFeature:
             highest frequencies first.
 
         """
-
         if nodeTypesFrom is None and nodeTypesTo is None:
             if self.doValues:
                 fql = collections.Counter()
-                for n, vals in self.data.items():
+                for n, vals in self.items():
                     for val in vals.values():
                         fql[val] += 1
                 return tuple(sorted(fql.items(), key=lambda x: (-x[1], x[0])))
             else:
                 fql = 0
-                for n, ms in self.data.items():
+                for n, ms in self.items():
                     fql += len(ms)
                 return fql
         else:
             fOtype = self.api.F.otype.v
             if self.doValues:
                 fql = collections.Counter()
-                for n, vals in self.data.items():
+                for n, vals in self.items():
                     if nodeTypesFrom is None or fOtype(n) in nodeTypesFrom:
                         for m, val in vals.items():
                             if nodeTypesTo is None or fOtype(m) in nodeTypesTo:
@@ -270,9 +472,9 @@ class EdgeFeature:
                 return tuple(sorted(fql.items(), key=lambda x: (-x[1], x[0])))
             else:
                 fql = 0
-                for n, ms in self.data.items():
+                for n, ms in self.items():
                     if nodeTypesFrom is None or fOtype(n) in nodeTypesFrom:
                         for m in ms:
                             if nodeTypesTo is None or fOtype(m) in nodeTypesTo:
-                                fql += len(ms)
+                                fql += 1
                 return fql

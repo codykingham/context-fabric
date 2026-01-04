@@ -18,6 +18,8 @@ dictionary: `tf.core.nodefeature.NodeFeature.items`
 
 import collections
 
+from .strings import StringPool, IntFeatureArray
+
 
 class NodeFeatures:
     pass
@@ -27,6 +29,9 @@ class NodeFeature:
     """Provides access to (node) feature data.
 
     For feature `fff` it is the result of `F.fff` or `Fs('fff')`.
+
+    Supports both legacy dict-based storage and new mmap-based backends
+    (StringPool for string features, IntFeatureArray for int features).
     """
 
     def __init__(self, api, metaData, data):
@@ -38,7 +43,40 @@ class NodeFeature:
         in the `.tf` feature file.
         """
 
-        self.data = data
+        self._data = data
+        self._is_mmap = isinstance(data, (StringPool, IntFeatureArray))
+
+    @property
+    def data(self):
+        """Get data as dict (for backward compatibility).
+
+        Note: For mmap backends, this materializes the data into memory.
+        Use v() for efficient single lookups.
+
+        Returns
+        -------
+        dict
+            The feature data as a dictionary mapping nodes to values.
+        """
+        if self._is_mmap:
+            return self._materialize()
+        return self._data
+
+    def _materialize(self):
+        """Convert mmap storage to dict.
+
+        Returns
+        -------
+        dict
+            Dictionary mapping nodes to their values.
+        """
+        result = {}
+        max_node = len(self._data)
+        for n in range(1, max_node + 1):
+            val = self.v(n)
+            if val is not None:
+                result[n] = val
+        return result
 
     def items(self):
         """A generator that yields the items of the feature, seen as a mapping.
@@ -53,8 +91,25 @@ class NodeFeature:
            data = dict(F.fff.items())
 
         """
+        if not self._is_mmap:
+            return self._data.items()
 
-        return self.data.items()
+        # Mmap iteration - return a generator
+        return self._items_generator()
+
+    def _items_generator(self):
+        """Generator for iterating over mmap data items.
+
+        Yields
+        ------
+        tuple
+            (node, value) pairs for nodes that have values.
+        """
+        max_node = len(self._data)
+        for n in range(1, max_node + 1):
+            val = self.v(n)
+            if val is not None:
+                yield (n, val)
 
     def v(self, n):
         """Get the value of a feature for a node.
@@ -69,9 +124,11 @@ class NodeFeature:
         integer | string | None
             The value of the feature for that node, if it is defined, else `None`.
         """
+        if self._is_mmap:
+            return self._data.get(n)
 
-        if n in self.data:
-            return self.data[n]
+        if n in self._data:
+            return self._data[n]
         return None
 
     def s(self, val):
@@ -94,12 +151,22 @@ class NodeFeature:
         """
 
         Crank = self.api.C.rank.data
-        return tuple(
-            sorted(
-                [n for n in self.data if self.data[n] == val],
-                key=lambda n: Crank[n - 1],
+
+        if self._is_mmap:
+            # For mmap, we need to scan all nodes
+            matches = []
+            max_node = len(self._data)
+            for n in range(1, max_node + 1):
+                if self.v(n) == val:
+                    matches.append(n)
+            return tuple(sorted(matches, key=lambda n: Crank[n - 1]))
+        else:
+            return tuple(
+                sorted(
+                    [n for n in self._data if self._data[n] == val],
+                    key=lambda n: Crank[n - 1],
+                )
             )
-        )
 
     def freqList(self, nodeTypes=None):
         """Frequency list of the values of this feature.
@@ -121,12 +188,22 @@ class NodeFeature:
         """
 
         fql = collections.Counter()
-        if nodeTypes is None:
-            for n in self.data:
-                fql[self.data[n]] += 1
+        fOtype = self.api.F.otype.v if nodeTypes else None
+
+        if self._is_mmap:
+            max_node = len(self._data)
+            for n in range(1, max_node + 1):
+                val = self.v(n)
+                if val is not None:
+                    if nodeTypes is None or fOtype(n) in nodeTypes:
+                        fql[val] += 1
         else:
-            fOtype = self.api.F.otype.v
-            for n in self.data:
-                if fOtype(n) in nodeTypes:
-                    fql[self.data[n]] += 1
+            if nodeTypes is None:
+                for n in self._data:
+                    fql[self._data[n]] += 1
+            else:
+                for n in self._data:
+                    if fOtype(n) in nodeTypes:
+                        fql[self._data[n]] += 1
+
         return tuple(sorted(fql.items(), key=lambda x: (-x[1], x[0])))

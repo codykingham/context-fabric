@@ -21,10 +21,10 @@ def mini_corpus_path(fixtures_dir):
 
 @pytest.fixture(scope="module")
 def fabric_core(mini_corpus_path):
-    """Create FabricCore instance for mini_corpus."""
-    from cfabric.core.fabric import FabricCore
+    """Create Fabric instance for mini_corpus."""
+    from cfabric.core.fabric import Fabric
 
-    TF = FabricCore(locations=mini_corpus_path, silent="deep")
+    TF = Fabric(locations=mini_corpus_path, silent="deep")
     return TF
 
 

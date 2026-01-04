@@ -18,8 +18,8 @@ plus some additional methods.
 Based on Text-Fabric by Dirk Roorda.
 """
 
-from cfabric.core.fabric import FabricCore
+from cfabric.core.fabric import Fabric
 from cfabric.core.parameters import VERSION, NAME, BANNER
 
 __version__ = VERSION
-__all__ = ["FabricCore", "VERSION", "NAME", "BANNER"]
+__all__ = ["Fabric", "VERSION", "NAME", "BANNER"]

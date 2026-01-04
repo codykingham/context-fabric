@@ -35,15 +35,6 @@ class TestDataInit:
         assert data.fileName == "myfeature"
         assert data.extension == ".tf"
 
-    def test_sets_bin_paths(self, mock_timestamp, tmp_path):
-        """Should set up binary cache paths."""
-        path = str(tmp_path / "feature.tf")
-        data = Data(path, mock_timestamp)
-
-        assert ".tf" in data.binDir
-        assert data.binPath.endswith(".tfx")
-
-
 class TestDataLoad:
     """Tests for Data.load() method."""
 
@@ -265,42 +256,6 @@ class TestDataSetDataType:
         data._setDataType()
 
         assert data.dataType == "str"
-
-
-class TestDataBinaryCache:
-    """Tests for binary caching functionality."""
-
-    def test_writes_binary_cache(self, mock_timestamp, fixtures_dir, tmp_path):
-        """Loading should create binary cache."""
-        # Copy a TF file to tmp_path
-        import shutil
-
-        src = fixtures_dir / "mini_corpus" / "word.tf"
-        dst = tmp_path / "word.tf"
-        shutil.copy(src, dst)
-
-        data = Data(str(dst), mock_timestamp)
-        data.load(silent=True)
-
-        # Check that binary cache was created
-        bin_dir = tmp_path / ".tf"
-        # Binary cache might be in a versioned subdirectory
-        assert data.dataLoaded
-
-    def test_clean_data_bin(self, mock_timestamp, tmp_path):
-        """cleanDataBin() should remove binary cache."""
-        path = str(tmp_path / "test.tf")
-        data = Data(path, mock_timestamp)
-
-        # Create a fake binary cache file
-        bin_dir = Path(data.binDir)
-        bin_dir.mkdir(parents=True, exist_ok=True)
-        bin_path = Path(data.binPath)
-        bin_path.write_text("fake")
-
-        data.cleanDataBin()
-
-        assert not bin_path.exists()
 
 
 class TestDataTypes:

@@ -138,16 +138,16 @@ class Locality:
         if n > maxNode:
             return tuple()
         fOtype = Fotype.v
-        levUp = self.api.C.levUp.data
+        levUp = self.api.C.levUp
 
         if otype is None:
-            return tuple(levUp[n - 1])
+            return tuple(levUp[n])
         elif type(otype) is str:
-            return tuple(m for m in levUp[n - 1] if fOtype(m) == otype)
+            return tuple(m for m in levUp[n] if fOtype(m) == otype)
         else:
             if type(otype) not in SET_TYPES:
                 otype = set(otype)
-            return tuple(m for m in levUp[n - 1] if fOtype(m) in otype)
+            return tuple(m for m in levUp[n] if fOtype(m) in otype)
 
     def d(self, n, otype=None):
         """Produces an ordered tuple of *downward* nodes.
@@ -185,20 +185,20 @@ class Locality:
             return tuple()
 
         Eoslots = self.api.E.oslots
-        Crank = self.api.C.rank.data
-        levDown = self.api.C.levDown.data
+        Crank = self.api.C.rank
+        levDown = self.api.C.levDown
         slotType = Fotype.slotType
         if otype is None:
             return tuple(
                 sorted(
-                    levDown[n - maxSlot - 1] + Eoslots.s(n),
-                    key=lambda m: Crank[m - 1],
+                    levDown[n] + Eoslots.s(n),
+                    key=lambda m: Crank[m],
                 )
             )
         elif otype == slotType:
-            return tuple(sorted(Eoslots.s(n), key=lambda m: Crank[m - 1]))
+            return tuple(sorted(Eoslots.s(n), key=lambda m: Crank[m]))
         elif type(otype) is str:
-            return tuple(m for m in levDown[n - maxSlot - 1] if fOtype(m) == otype)
+            return tuple(m for m in levDown[n] if fOtype(m) == otype)
         else:
             if type(otype) not in SET_TYPES:
                 otype = set(otype)
@@ -206,10 +206,10 @@ class Locality:
                 sorted(
                     (
                         k
-                        for k in levDown[n - maxSlot - 1] + Eoslots.s(n)
+                        for k in levDown[n] + Eoslots.s(n)
                         if fOtype(k) in otype
                     ),
-                    key=lambda m: Crank[m - 1],
+                    key=lambda m: Crank[m],
                 )
             )
 
