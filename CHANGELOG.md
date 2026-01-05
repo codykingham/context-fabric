@@ -5,7 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2026-01-05 [ck]
+## [0.2.1] - 2026-01-05 ([ck])
+
+### Added
+- Type annotations on function signatures across all public APIs
+- GitHub Actions CI workflow for automated testing
+
+### Changed
+- Test directory internal structure now mirrors package layout (`tests/unit/features/`, `tests/unit/storage/`, etc.)
+- `silentConvert()` now always returns a string (was `str | bool`)
+
+### Fixed
+- `versionSort()` handles non-matching regex patterns
+- `rangesFromSet()` / `rangesFromList()` type safety improvements
+- `console()` accepts optional `file` parameter
+- `tfFromValue()` uses isinstance for proper type narrowing
+- `explore()` explicitly returns `None` when `show=False`
+
+## [0.2.0] - 2026-01-05 ([ck])
 
 ### Changed
 - **Monorepo structure**: Reorganized to `libs/core/` layout for future multi-package support
@@ -44,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - All 700 tests passing
 - Test fixtures path resolution fixed for new structure
 
-## [0.1.0] - 2026-01-04 [ck]
+## [0.1.0] - 2026-01-04 ([ck])
 
 Initial release. Forked from Dirk Roorda's [Text-Fabric](https://github.com/annotation/text-fabric)
 with a new memory-mapped storage format.
