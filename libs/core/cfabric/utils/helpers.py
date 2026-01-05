@@ -277,12 +277,20 @@ def check32() -> tuple[bool, str, str]:
     return (on32, warn, msg)
 
 
-def console(*msg: Any, error: bool = False, newline: bool = True) -> None:
+def console(
+    *msg: Any,
+    error: bool = False,
+    newline: bool = True,
+    file: Any = None,
+) -> None:
     msg_str = " ".join(m if type(m) is str else repr(m) for m in msg)
     msg_str = "" if not msg_str else ux(msg_str)
     msg_str = msg_str[1:] if msg_str.startswith("\n") else msg_str
     msg_str = msg_str[0:-1] if msg_str.endswith("\n") else msg_str
-    target = sys.stderr if error else sys.stdout
+    if file is not None:
+        target = file
+    else:
+        target = sys.stderr if error else sys.stdout
     nl = "\n" if newline else ""
     target.write(f"{msg_str}{nl}")
     target.flush()
@@ -386,17 +394,12 @@ def valueFromTf(tf: str) -> str:
 
 
 def tfFromValue(val: str | int) -> str | None:
-    valTp = type(val)
-    isInt = valTp is int
-    isStr = valTp is str
-    if not isInt and not isStr:
-        console(f"Wrong type for a TF value: {valTp}: {val}", error=True)
-        return None
-    return (
-        str(val)
-        if type(val) is int
-        else val.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n")
-    )
+    if isinstance(val, int):
+        return str(val)
+    if isinstance(val, str):
+        return val.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n")
+    console(f"Wrong type for a TF value: {type(val)}: {val}", error=True)
+    return None
 
 
 def makeIndex(data: dict[int, int]) -> dict[int, set[int]]:
