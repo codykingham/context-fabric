@@ -1,8 +1,14 @@
+from __future__ import annotations
+
 import os
 import json
 import yaml
+from typing import TYPE_CHECKING, Any, TextIO, BinaryIO
 
 from shutil import rmtree, copytree, copy
+
+if TYPE_CHECKING:
+    from cfabric.utils.attrs import AttrDict
 
 from cfabric.core.config import (
     ON_IPAD,
@@ -21,7 +27,7 @@ from cfabric.core.config import (
 from cfabric.utils.attrs import deepAttrDict
 
 
-def str_presenter(dumper, data):
+def str_presenter(dumper: yaml.Dumper, data: str) -> yaml.ScalarNode:
     """configures yaml for dumping multiline strings
     Ref: https://stackoverflow.com/questions/8640959
     """
@@ -35,7 +41,7 @@ yaml.add_representer(str, str_presenter)
 yaml.representer.SafeRepresenter.add_representer(str, str_presenter)
 
 
-def fileOpen(*args, **kwargs):
+def fileOpen(*args: Any, **kwargs: Any) -> TextIO | BinaryIO:
     """Wrapper around `open()`, making sure `encoding="utf8" is passed.
 
     This function calls `open()` with the same arguments, but if the optional
@@ -48,7 +54,7 @@ def fileOpen(*args, **kwargs):
     return open(*args, **kwargs, encoding="utf8")
 
 
-def normpath(path):
+def normpath(path: str | None) -> str | None:
     if path is None:
         return None
     norm = os.path.normpath(path)
@@ -65,11 +71,11 @@ splitExt = os.path.splitext
 mTime = os.path.getmtime
 
 
-def abspath(path):
+def abspath(path: str) -> str:
     return normpath(os.path.abspath(path))
 
 
-def expanduser(path):
+def expanduser(path: str) -> str:
     nPath = normpath(path)
     if nPath.startswith("~"):
         return f"{_homeDir}{nPath[1:]}"
@@ -77,7 +83,7 @@ def expanduser(path):
     return nPath
 
 
-def unexpanduser(path):
+def unexpanduser(path: str) -> str:
     nPath = normpath(path)
     # if nPath.startswith(_homeDir):
     #    return f"~{nPath[len(_homeDir):]}"
@@ -85,13 +91,13 @@ def unexpanduser(path):
     return nPath.replace(_homeDir, "~")
 
 
-def setDir(obj):
+def setDir(obj: Any) -> None:
     obj.homeDir = expanduser("~")
     obj.curDir = normpath(os.getcwd())
     (obj.parentDir, x) = os.path.split(obj.curDir)
 
 
-def expandDir(obj, dirName):
+def expandDir(obj: Any, dirName: str) -> str:
     if dirName.startswith("~"):
         dirName = dirName.replace("~", obj.homeDir, 1)
     elif dirName.startswith(".."):
@@ -101,12 +107,12 @@ def expandDir(obj, dirName):
     return normpath(dirName)
 
 
-def prefixSlash(path):
+def prefixSlash(path: str) -> str:
     """Prefix a / before a path if it is non-empty and not already starts with it."""
     return f"/{path}" if path and not path.startswith("/") else path
 
 
-def getLocation(targetDir=None):
+def getLocation(targetDir: str | None = None) -> tuple[str | None, str | None, str | None, str | None]:
     """Get back-end, org, repo, relative of directory.
 
     Parameters
@@ -164,7 +170,7 @@ def getLocation(targetDir=None):
     return (parts[0], parts[1], parts[2], relative)
 
 
-def backendRep(be, kind, default=None):
+def backendRep(be: str | None, kind: str, default: str | None = None) -> str | None:
     """Various back-end dependent values.
 
     First of all, the back-end value is
@@ -273,7 +279,7 @@ def backendRep(be, kind, default=None):
     return None
 
 
-def annotateDir(app, tool):
+def annotateDir(app: Any, tool: str) -> tuple[str, str]:
     """Return the input and output and report directories for a specific annotation tool.
 
     *   The input directory is located next to the TF data of the corpus
@@ -402,12 +408,12 @@ in `org/repo-search/layeredsearch`.
 """
 
 
-def dirEmpty(target):
+def dirEmpty(target: str) -> bool:
     target = normpath(target)
     return not os.path.exists(target) or not os.listdir(target)
 
 
-def clearTree(path):
+def clearTree(path: str) -> None:
     """Remove all files from a directory, recursively, but leave subdirectories.
 
     Reason: we want to inspect output in an editor.
@@ -421,7 +427,7 @@ def clearTree(path):
         home directory.
     """
 
-    subdirs = []
+    subdirs: list[str] = []
     path = expanduser(path)
 
     with os.scandir(path) as dh:
@@ -438,7 +444,7 @@ def clearTree(path):
         clearTree(f"{path}/{subdir}")
 
 
-def initTree(path, fresh=False, gentle=False):
+def initTree(path: str, fresh: bool = False, gentle: bool = False) -> None:
     """Make sure a directory exists, optionally clean it.
 
     Parameters
@@ -470,17 +476,17 @@ def initTree(path, fresh=False, gentle=False):
         os.makedirs(path, exist_ok=True)
 
 
-def dirNm(path):
+def dirNm(path: str) -> str:
     """Get the directory part of a file name."""
     return os.path.dirname(path)
 
 
-def fileNm(path):
+def fileNm(path: str) -> str:
     """Get the file part of a file name."""
     return os.path.basename(path)
 
 
-def extNm(path):
+def extNm(path: str) -> str:
     """Get the extension part of a file name.
 
     The dot is not included.
@@ -490,35 +496,35 @@ def extNm(path):
     return "" if len(parts) == 0 else parts[-1]
 
 
-def stripExt(path):
+def stripExt(path: str) -> str:
     """Strip the extension of a file name, if there is one."""
     (d, f) = (dirNm(path), fileNm(path))
     sep = "/" if d else ""
     return f"{d}{sep}{f.rsplit('.', 1)[0]}"
 
 
-def replaceExt(path, newExt):
+def replaceExt(path: str, newExt: str) -> str:
     """Replace the extension of a path by another one. Specify it without dot."""
     (main, ext) = os.path.splitext(path)
     return f"{main}.{newExt}"
 
 
-def splitPath(path):
+def splitPath(path: str) -> tuple[str, str]:
     """Split a file name in a directory part and a file part."""
     return os.path.split(path)
 
 
-def isFile(path):
+def isFile(path: str) -> bool:
     """Whether path exists and is a file."""
     return os.path.isfile(path)
 
 
-def isDir(path):
+def isDir(path: str) -> bool:
     """Whether path exists and is a directory."""
     return os.path.isdir(path)
 
 
-def fileMake(path, force=False):
+def fileMake(path: str, force: bool = False) -> None:
     """Create a new empty file.
 
     If necessary, create intermediate subdirectories.
@@ -541,18 +547,18 @@ def fileMake(path, force=False):
             pass
 
 
-def fileExists(path):
+def fileExists(path: str) -> bool:
     """Whether a path exists as file on the file system."""
     return os.path.isfile(path)
 
 
-def fileRemove(path):
+def fileRemove(path: str) -> None:
     """Removes a file if it exists as file."""
     if fileExists(path):
         os.remove(path)
 
 
-def fileCopy(pathSrc, pathDst):
+def fileCopy(pathSrc: str, pathDst: str) -> None:
     """Copies a file if it exists as file.
 
     Wipes the destination file, if it exists.
@@ -565,7 +571,7 @@ def fileCopy(pathSrc, pathDst):
         copy(pathSrc, pathDst)
 
 
-def fileCopyExpr(dirSrc, dirDst):
+def fileCopyExpr(dirSrc: str, dirDst: str) -> None:
     """Copies the `__checkout__.txt` file from one directory to an other.
 
     Wipes the destination file, if it exists.
@@ -581,7 +587,7 @@ def fileCopyExpr(dirSrc, dirDst):
         copy(pathSrc, pathDst)
 
 
-def fileMove(pathSrc, pathDst):
+def fileMove(pathSrc: str, pathDst: str) -> None:
     """Moves a file if it exists as file.
 
     Wipes the destination file, if it exists.
@@ -591,7 +597,7 @@ def fileMove(pathSrc, pathDst):
     os.rename(pathSrc, pathDst)
 
 
-def dirExists(path):
+def dirExists(path: str | None) -> bool:
     """Whether a path exists as directory on the file system."""
     return (
         False
@@ -604,13 +610,13 @@ def dirExists(path):
     )
 
 
-def dirRemove(path):
+def dirRemove(path: str) -> None:
     """Removes a directory if it exists as directory."""
     if dirExists(path):
         rmtree(path)
 
 
-def dirMove(pathSrc, pathDst):
+def dirMove(pathSrc: str, pathDst: str) -> bool:
     """Moves a directory if it exists as directory.
 
     Refuses the operation in the target exists.
@@ -621,7 +627,7 @@ def dirMove(pathSrc, pathDst):
     return True
 
 
-def dirCopy(pathSrc, pathDst, noclobber=False):
+def dirCopy(pathSrc: str, pathDst: str, noclobber: bool = False) -> bool:
     """Copies a directory if it exists as directory.
 
     Wipes the destination directory, if it exists.
@@ -637,13 +643,13 @@ def dirCopy(pathSrc, pathDst, noclobber=False):
         return False
 
 
-def dirMake(path):
+def dirMake(path: str) -> None:
     """Creates a directory if it does not already exist as directory."""
     if not dirExists(path):
         os.makedirs(path, exist_ok=True)
 
 
-def dirContents(path):
+def dirContents(path: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """Gets the contents of a directory.
 
     Only the direct entries in the directory (not recursively), and only real files
@@ -665,8 +671,8 @@ def dirContents(path):
     if not dirExists(path):
         return ((), ())
 
-    files = []
-    dirs = []
+    files: list[str] = []
+    dirs: list[str] = []
 
     for entry in os.listdir(path):
         if os.path.isfile(f"{path}/{entry}"):
@@ -677,7 +683,7 @@ def dirContents(path):
     return (tuple(files), tuple(dirs))
 
 
-def dirAllFiles(path, ignore=None):
+def dirAllFiles(path: str, ignore: set[str] | None = None) -> list[str] | tuple[str, ...]:
     """Gets all the files found by `path`.
 
     The result is just `[path]` if `path` is a file, otherwise the list of files under
@@ -704,7 +710,7 @@ def dirAllFiles(path, ignore=None):
     if not dirExists(path):
         return []
 
-    files = []
+    files: list[str] = []
 
     if not ignore:
         ignore = set()
@@ -722,7 +728,7 @@ def dirAllFiles(path, ignore=None):
     return tuple(sorted(files))
 
 
-def getCwd():
+def getCwd() -> str:
     """Get current directory.
 
     Returns
@@ -733,7 +739,7 @@ def getCwd():
     return os.getcwd()
 
 
-def chDir(directory):
+def chDir(directory: str) -> None:
     """Change to other directory.
 
     Parameters
@@ -744,7 +750,12 @@ def chDir(directory):
     return os.chdir(directory)
 
 
-def readJson(text=None, plain=False, asFile=None, preferTuples=False):
+def readJson(
+    text: str | None = None,
+    plain: bool = False,
+    asFile: str | TextIO | None = None,
+    preferTuples: bool = False
+) -> dict[str, Any] | AttrDict:
     """Read a JSON file or string.
 
     The input data is either a text string or a file name or a file handle.
@@ -786,7 +797,7 @@ def readJson(text=None, plain=False, asFile=None, preferTuples=False):
     return cfg if plain else deepAttrDict(cfg, preferTuples=preferTuples)
 
 
-def writeJson(data, asFile=None, **kwargs):
+def writeJson(data: Any, asFile: str | TextIO | None = None, **kwargs: Any) -> str | None:
     """Write data as JSON.
 
     The output is either delivered as string or written to a file.
@@ -825,9 +836,16 @@ def writeJson(data, asFile=None, **kwargs):
             return dumped
 
         asFile.write(dumped)
+    return None
 
 
-def readYaml(text=None, plain=False, asFile=None, preferTuples=True, preferLists=True):
+def readYaml(
+    text: str | None = None,
+    plain: bool = False,
+    asFile: str | TextIO | None = None,
+    preferTuples: bool = True,
+    preferLists: bool = True
+) -> dict[str, Any] | AttrDict | None:
     """Read a YAML file or string.
 
     The input data is either a text string or a file name or a file handle.
@@ -853,7 +871,7 @@ def readYaml(text=None, plain=False, asFile=None, preferTuples=True, preferLists
     object
         The resulting data structure.
     """
-    kwargs = dict(Loader=yaml.FullLoader)
+    kwargs: dict[str, Any] = dict(Loader=yaml.FullLoader)
 
     if asFile is None:
         cfg = yaml.load(text, **kwargs)
@@ -867,7 +885,7 @@ def readYaml(text=None, plain=False, asFile=None, preferTuples=True, preferLists
     return cfg if plain else deepAttrDict(cfg, preferTuples=preferTuples)
 
 
-def writeYaml(data, asFile=None, sorted=False):
+def writeYaml(data: Any, asFile: str | TextIO | None = None, sorted: bool = False) -> str | None:
     """Write data as YAML.
 
     The output is either delivered as string or written to a file.
@@ -890,7 +908,7 @@ def writeYaml(data, asFile=None, sorted=False):
         If asFile is not None, the function returns None and the result is written
         to a file. Otherwise, the result string is returned.
     """
-    kwargs = dict(allow_unicode=True, sort_keys=sorted)
+    kwargs: dict[str, Any] = dict(allow_unicode=True, sort_keys=sorted)
 
     if type(asFile) is str:
         with fileOpen(asFile, mode="w") as fh:
@@ -902,3 +920,4 @@ def writeYaml(data, asFile=None, sorted=False):
             return dumped
 
         asFile.write(dumped)
+    return None

@@ -14,7 +14,7 @@ class TestCompiler:
     @pytest.fixture
     def mini_corpus_copy(self):
         """Create a copy of mini_corpus in a temp directory."""
-        mini_corpus = Path(__file__).parent.parent / 'fixtures' / 'mini_corpus'
+        mini_corpus = Path(__file__).parent.parent.parent / 'fixtures' / 'mini_corpus'
         with tempfile.TemporaryDirectory() as tmpdir:
             test_dir = Path(tmpdir) / 'mini_corpus'
             shutil.copytree(mini_corpus, test_dir)
@@ -64,7 +64,7 @@ class TestCompileCorpus:
     @pytest.fixture
     def mini_corpus_copy(self):
         """Create a copy of mini_corpus in a temp directory."""
-        mini_corpus = Path(__file__).parent.parent / 'fixtures' / 'mini_corpus'
+        mini_corpus = Path(__file__).parent.parent.parent / 'fixtures' / 'mini_corpus'
         with tempfile.TemporaryDirectory() as tmpdir:
             test_dir = Path(tmpdir) / 'mini_corpus'
             shutil.copytree(mini_corpus, test_dir)
@@ -84,7 +84,7 @@ class TestFabricCompile:
     @pytest.fixture
     def fabric_with_corpus(self):
         """Create Fabric with mini_corpus copy."""
-        mini_corpus = Path(__file__).parent.parent / 'fixtures' / 'mini_corpus'
+        mini_corpus = Path(__file__).parent.parent.parent / 'fixtures' / 'mini_corpus'
         with tempfile.TemporaryDirectory() as tmpdir:
             test_dir = Path(tmpdir) / 'mini_corpus'
             shutil.copytree(mini_corpus, test_dir)
@@ -111,7 +111,7 @@ class TestLoadCfm:
     @pytest.fixture
     def compiled_corpus(self):
         """Create and compile a mini_corpus copy."""
-        mini_corpus = Path(__file__).parent.parent / 'fixtures' / 'mini_corpus'
+        mini_corpus = Path(__file__).parent.parent.parent / 'fixtures' / 'mini_corpus'
         with tempfile.TemporaryDirectory() as tmpdir:
             test_dir = Path(tmpdir) / 'mini_corpus'
             shutil.copytree(mini_corpus, test_dir)
@@ -190,7 +190,7 @@ class TestCfmVsLegacyEquivalence:
     @pytest.fixture
     def both_apis(self):
         """Load corpus via both legacy and CFM methods."""
-        mini_corpus = Path(__file__).parent.parent / 'fixtures' / 'mini_corpus'
+        mini_corpus = Path(__file__).parent.parent.parent / 'fixtures' / 'mini_corpus'
         with tempfile.TemporaryDirectory() as tmpdir:
             test_dir = Path(tmpdir) / 'mini_corpus'
             shutil.copytree(mini_corpus, test_dir)
@@ -235,7 +235,7 @@ class TestCfmLocalityApi:
     @pytest.fixture
     def cfm_api(self):
         """Load corpus from .cfm format."""
-        mini_corpus = Path(__file__).parent.parent / 'fixtures' / 'mini_corpus'
+        mini_corpus = Path(__file__).parent.parent.parent / 'fixtures' / 'mini_corpus'
         with tempfile.TemporaryDirectory() as tmpdir:
             test_dir = Path(tmpdir) / 'mini_corpus'
             shutil.copytree(mini_corpus, test_dir)
@@ -309,7 +309,7 @@ class TestCfmEdgeFeatureApi:
     @pytest.fixture
     def cfm_api(self):
         """Load corpus from .cfm format."""
-        mini_corpus = Path(__file__).parent.parent / 'fixtures' / 'mini_corpus'
+        mini_corpus = Path(__file__).parent.parent.parent / 'fixtures' / 'mini_corpus'
         with tempfile.TemporaryDirectory() as tmpdir:
             test_dir = Path(tmpdir) / 'mini_corpus'
             shutil.copytree(mini_corpus, test_dir)
@@ -344,7 +344,7 @@ class TestCfmSearchApi:
     @pytest.fixture
     def cfm_api(self):
         """Load corpus from .cfm format."""
-        mini_corpus = Path(__file__).parent.parent / 'fixtures' / 'mini_corpus'
+        mini_corpus = Path(__file__).parent.parent.parent / 'fixtures' / 'mini_corpus'
         with tempfile.TemporaryDirectory() as tmpdir:
             test_dir = Path(tmpdir) / 'mini_corpus'
             shutil.copytree(mini_corpus, test_dir)
@@ -403,7 +403,7 @@ class TestCfmTextApi:
     @pytest.fixture
     def cfm_api(self):
         """Load corpus from .cfm format."""
-        mini_corpus = Path(__file__).parent.parent / 'fixtures' / 'mini_corpus'
+        mini_corpus = Path(__file__).parent.parent.parent / 'fixtures' / 'mini_corpus'
         with tempfile.TemporaryDirectory() as tmpdir:
             test_dir = Path(tmpdir) / 'mini_corpus'
             shutil.copytree(mini_corpus, test_dir)
@@ -462,7 +462,7 @@ class TestCfmEdgeValuesNone:
     @pytest.fixture
     def cfm_api(self):
         """Load corpus from .cfm format with fresh compile."""
-        mini_corpus = Path(__file__).parent.parent / 'fixtures' / 'mini_corpus'
+        mini_corpus = Path(__file__).parent.parent.parent / 'fixtures' / 'mini_corpus'
         with tempfile.TemporaryDirectory() as tmpdir:
             test_dir = Path(tmpdir) / 'mini_corpus'
             shutil.copytree(mini_corpus, test_dir)
@@ -515,7 +515,7 @@ class TestCfmSectionsComputed:
     @pytest.fixture
     def cfm_api_with_sections(self):
         """Load corpus with sections from .cfm format (two-stage: compile then reload)."""
-        mini_corpus = Path(__file__).parent.parent / 'fixtures' / 'mini_corpus'
+        mini_corpus = Path(__file__).parent.parent.parent / 'fixtures' / 'mini_corpus'
         with tempfile.TemporaryDirectory() as tmpdir:
             test_dir = Path(tmpdir) / 'mini_corpus'
             shutil.copytree(mini_corpus, test_dir)
@@ -573,7 +573,7 @@ class TestCfmNodeFeatureNone:
     @pytest.fixture
     def cfm_api(self):
         """Load corpus from .cfm format with fresh compile."""
-        mini_corpus = Path(__file__).parent.parent / 'fixtures' / 'mini_corpus'
+        mini_corpus = Path(__file__).parent.parent.parent / 'fixtures' / 'mini_corpus'
         with tempfile.TemporaryDirectory() as tmpdir:
             test_dir = Path(tmpdir) / 'mini_corpus'
             shutil.copytree(mini_corpus, test_dir)
@@ -622,7 +622,7 @@ class TestCfmCompileReloadCycle:
     @pytest.fixture
     def fresh_and_cached_apis(self):
         """Load corpus fresh, then simulate reload from cache."""
-        mini_corpus = Path(__file__).parent.parent / 'fixtures' / 'mini_corpus'
+        mini_corpus = Path(__file__).parent.parent.parent / 'fixtures' / 'mini_corpus'
         with tempfile.TemporaryDirectory() as tmpdir:
             test_dir = Path(tmpdir) / 'mini_corpus'
             shutil.copytree(mini_corpus, test_dir)
@@ -706,7 +706,7 @@ class TestCfmSectionsCycle:
     @pytest.fixture
     def fresh_and_cached_apis_with_sections(self):
         """Load corpus with sections, fresh and cached."""
-        mini_corpus = Path(__file__).parent.parent / 'fixtures' / 'mini_corpus'
+        mini_corpus = Path(__file__).parent.parent.parent / 'fixtures' / 'mini_corpus'
         with tempfile.TemporaryDirectory() as tmpdir:
             test_dir = Path(tmpdir) / 'mini_corpus'
             shutil.copytree(mini_corpus, test_dir)

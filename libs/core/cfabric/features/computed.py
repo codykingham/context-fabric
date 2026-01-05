@@ -22,6 +22,15 @@ so we have made it accessible in the `cfabric.computed.Computeds`-API.
     Subsequent calls to `TF.load()` will automatically use the compiled format.
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from cfabric.core.api import Api
+    from cfabric.storage.csr import CSRArray
+
 
 class Computeds:
     pass
@@ -33,7 +42,7 @@ class Computed:
     For component `ccc` it is the result of `C.ccc` or `Cs('ccc')`.
     """
 
-    def __init__(self, api, data):
+    def __init__(self, api: Api, data: Any) -> None:
         self.api = api
         self.data = data
 
@@ -59,10 +68,10 @@ class OrderComputed(Computed):
     def __getitem__(self, i: int) -> int:
         return int(self.data[i])
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[int]:
         return iter(self.data)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.data)
 
 
@@ -72,7 +81,7 @@ class LevUpComputed(Computed):
     Supports CSRArray backend for mmap.
     """
 
-    def __getitem__(self, n: int):
+    def __getitem__(self, n: int) -> tuple[int, ...]:
         from cfabric.storage.csr import CSRArray
 
         if isinstance(self.data, CSRArray):
@@ -87,7 +96,7 @@ class LevDownComputed(Computed):
     Only for non-slot nodes, so index is n - maxSlot - 1.
     """
 
-    def __getitem__(self, n: int):
+    def __getitem__(self, n: int) -> tuple[int, ...]:
         from cfabric.storage.csr import CSRArray
 
         maxSlot = self.api.F.otype.maxSlot

@@ -11,14 +11,50 @@ the order and nature of the steps is configured in
 The functions in this module implement those tasks.
 """
 
+from __future__ import annotations
+
 import collections
 import functools
 import array
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from cfabric.utils.helpers import itemize
 
+if TYPE_CHECKING:
+    from cfabric.core.api import Api
 
-def levels(info, error, otype, oslots, otext):
+# Type aliases for clarity
+InfoFunc = Callable[..., None]
+ErrorFunc = Callable[..., None]
+OtypeData = tuple[tuple[str, ...], int, int, str]
+OslotsData = tuple[tuple[tuple[int, ...], ...], dict[str, str]]
+OtextData = dict[str, str]
+LevelsData = tuple[tuple[str, float, int, int], ...]
+OrderData = tuple[int, ...]
+RankData = array.array[int]
+LevUpData = tuple[tuple[int, ...], ...]
+LevDownData = tuple[array.array[int], ...]
+BoundaryData = tuple[tuple[tuple[int, ...], ...], tuple[tuple[int, ...], ...]]
+SectionsResult = dict[str, Any]
+StructureResult = tuple[
+    dict[int, tuple[tuple[str, str | int | None], ...]],
+    dict[tuple[tuple[str, str | int | None], ...], int],
+    dict[tuple[tuple[str, str | int | None], ...], tuple[int, ...]],
+    tuple[int, ...],
+    dict[int, int],
+    dict[int, tuple[int, ...]],
+]
+CharactersResult = dict[str, list[tuple[str, int]]]
+
+
+def levels(
+    info: InfoFunc,
+    error: ErrorFunc,
+    otype: OtypeData,
+    oslots: OslotsData,
+    otext: OtextData,
+) -> LevelsData:
     """Computes level data.
 
     For each node type, compute the average number of slots occupied by its nodes,
@@ -72,32 +108,33 @@ def levels(info, error, otype, oslots, otext):
         See `cfabric.text`.
     """
 
-    (otype, maxSlot, maxNode, slotType) = otype
-    oslots = oslots[0]
+    (otype_data, maxSlot, maxNode, slotType) = otype
+    oslots_data = oslots[0]
     levelOrder = otext.get("levels", None)
 
+    levelRank: dict[str, int] = {}
     if levelOrder is not None:
         levelRank = {level: i for (i, level) in enumerate(levelOrder.split(","))}
-    otypeCount = collections.Counter()
-    otypeMin = {}
-    otypeMax = {}
-    slotSetLengths = collections.Counter()
+    otypeCount: collections.Counter[str] = collections.Counter()
+    otypeMin: dict[str, int] = {}
+    otypeMax: dict[str, int] = {}
+    slotSetLengths: collections.Counter[str] = collections.Counter()
     info("get ranking of otypes")
-    for k in range(len(oslots)):
-        ntp = otype[k]
+    for k in range(len(oslots_data)):
+        ntp = otype_data[k]
         otypeCount[ntp] += 1
-        slotSetLengths[ntp] += len(oslots[k])
+        slotSetLengths[ntp] += len(oslots_data[k])
         tfn = k + maxSlot + 1
         if ntp not in otypeMin:
             otypeMin[ntp] = tfn
         if ntp not in otypeMax or otypeMax[ntp] < tfn:
             otypeMax[ntp] = tfn
-    sortKey = (
-        (lambda x: -x[1])
+    sortKey: Callable[[tuple[str, float, int, int]], tuple[int, ...] | tuple[float]] = (
+        (lambda x: (-x[1],))
         if levelOrder is None
-        else (lambda x: (-1, levelRank[x[0]]) if x[0] in levelRank else (1, -x[1]))
+        else (lambda x: (-1, levelRank[x[0]]) if x[0] in levelRank else (1, int(-x[1])))
     )
-    result = sorted(
+    result: list[tuple[str, float, int, int]] = sorted(
         (
             (
                 ntp,
@@ -109,7 +146,7 @@ def levels(info, error, otype, oslots, otext):
         ),
         key=sortKey,
     ) + [(slotType, 1, 1, maxSlot)]
-    resultIndex = {r[0]: i for (i, r) in enumerate(result)}
+    resultIndex: dict[str, int] = {r[0]: i for (i, r) in enumerate(result)}
 
     levelConstraintsSpec = otext.get("levelConstraints", None)
 
@@ -133,7 +170,13 @@ def levels(info, error, otype, oslots, otext):
     return tuple(result)
 
 
-def order(info, error, otype, oslots, levels):
+def order(
+    info: InfoFunc,
+    error: ErrorFunc,
+    otype: OtypeData,
+    oslots: OslotsData,
+    levels: LevelsData,
+) -> OrderData:
     """Computes order data for the canonical ordering.
 
     The canonical ordering between nodes is defined in terms of the slots that
@@ -164,27 +207,27 @@ def order(info, error, otype, oslots, levels):
     cfabric.nodes: canonical ordering
     """
 
-    (otype, maxSlot, maxNode, slotType) = otype
-    oslots = oslots[0]
+    (otype_data, maxSlot, maxNode, slotType) = otype
+    oslots_data = oslots[0]
     info("assigning otype levels to nodes")
-    otypeLevels = dict(((x[0], i) for (i, x) in enumerate(reversed(levels))))
+    otypeLevels: dict[str, int] = dict(((x[0], i) for (i, x) in enumerate(reversed(levels))))
 
-    def otypeRank(n):
-        return otypeLevels[slotType if n < maxSlot + 1 else otype[n - maxSlot - 1]]
+    def otypeRank(n: int) -> int:
+        return otypeLevels[slotType if n < maxSlot + 1 else otype_data[n - maxSlot - 1]]
 
-    def before(na, nb):
+    def before(na: int, nb: int) -> int:
         if na < maxSlot + 1:
             a = na
             sa = {a}
         else:
             a = na - maxSlot
-            sa = set(oslots[a - 1])
+            sa = set(oslots_data[a - 1])
         if nb < maxSlot + 1:
             b = nb
             sb = {b}
         else:
             b = nb - maxSlot
-            sb = set(oslots[b - 1])
+            sb = set(oslots_data[b - 1])
         oa = otypeRank(na)
         ob = otypeRank(nb)
         if sa == sb:
@@ -210,7 +253,12 @@ def order(info, error, otype, oslots, levels):
     return tuple(nodes)
 
 
-def rank(info, error, otype, order):
+def rank(
+    info: InfoFunc,
+    error: ErrorFunc,
+    otype: OtypeData,
+    order: OrderData,
+) -> RankData:
     """Computes rank data.
 
     The rank of a node is its place in among the other nodes in the
@@ -233,14 +281,20 @@ def rank(info, error, otype, order):
         The ranks of all nodes, slot and nonslot, with respect to the canonical order.
     """
 
-    (otype, maxSlot, maxNode, slotType) = otype
+    (otype_data, maxSlot, maxNode, slotType) = otype
     info("ranking nodes")
-    nodesRank = dict(((n, i) for (i, n) in enumerate(order)))
+    nodesRank: dict[int, int] = dict(((n, i) for (i, n) in enumerate(order)))
     return array.array("I", (nodesRank[n] for n in range(1, maxNode + 1)))
     # return tuple((nodesRank[n] for n in range(1, maxNode + 1)))
 
 
-def levUp(info, error, otype, oslots, rank):
+def levUp(
+    info: InfoFunc,
+    error: ErrorFunc,
+    otype: OtypeData,
+    oslots: OslotsData,
+    rank: RankData,
+) -> LevUpData:
     """Computes level-up data.
 
     Level-up data is used by the API function `cfabric.locality.Locality.u`.
@@ -282,15 +336,15 @@ def levUp(info, error, otype, oslots, rank):
     this raw data might be a deal.
     """
 
-    (otype, maxSlot, maxNode, slotType) = otype
-    oslots = oslots[0]
+    (otype_data, maxSlot, maxNode, slotType) = otype
+    oslots_data = oslots[0]
     info("making inverse of edge feature oslots")
-    oslotsInv = {}
-    for k, mList in enumerate(oslots):
+    oslotsInv: dict[int, set[int]] = {}
+    for k, mList in enumerate(oslots_data):
         for m in mList:
             oslotsInv.setdefault(m, set()).add(k + 1 + maxSlot)
     info("listing embedders of all nodes")
-    embedders = []
+    embedders: list[tuple[int, ...]] = []
     for n in range(1, maxSlot + 1):
         contentEmbedders = oslotsInv.get(n, tuple())
         embedders.append(
@@ -302,7 +356,7 @@ def levUp(info, error, otype, oslots, rank):
             )
         )
     for n in range(maxSlot + 1, maxNode + 1):
-        mList = oslots[n - maxSlot - 1]
+        mList = oslots_data[n - maxSlot - 1]
         if len(mList) == 0:
             embedders.append(tuple())
         else:
@@ -320,8 +374,8 @@ def levUp(info, error, otype, oslots, rank):
                 )
             )
     # reuse embedder tuples, because lots of nodes share embedders
-    seen = {}
-    embeddersx = []
+    seen: dict[tuple[int, ...], tuple[int, ...]] = {}
+    embeddersx: list[tuple[int, ...]] = []
     for t in embedders:
         if t not in seen:
             # seen[t] = array.array("I", t)
@@ -330,7 +384,13 @@ def levUp(info, error, otype, oslots, rank):
     return tuple(embeddersx)
 
 
-def levDown(info, error, otype, levUp, rank):
+def levDown(
+    info: InfoFunc,
+    error: ErrorFunc,
+    otype: OtypeData,
+    levUp: LevUpData,
+    rank: RankData,
+) -> LevDownData:
     """Computes level-down data.
 
     Level-down data is used by the API function `cfabric.locality.Locality.d`.
@@ -370,14 +430,14 @@ def levDown(info, error, otype, levUp, rank):
         this raw data might be a deal.
     """
 
-    (otype, maxSlot, maxNode, slotType) = otype
+    (otype_data, maxSlot, maxNode, slotType) = otype
     info("inverting embedders")
-    inverse = {}
+    inverse: dict[int, set[int]] = {}
     for n in range(maxSlot + 1, maxNode + 1):
         for m in levUp[n - 1]:
             inverse.setdefault(m, set()).add(n)
     info("turning embeddees into list")
-    embeddees = []
+    embeddees: list[array.array[int]] = []
     for n in range(maxSlot + 1, maxNode + 1):
         embeddees.append(
             array.array("I", sorted(inverse.get(n, []), key=lambda m: rank[m - 1]))
@@ -386,7 +446,13 @@ def levDown(info, error, otype, levUp, rank):
     return tuple(embeddees)
 
 
-def characters(info, error, otext, tFormats, *tFeats):
+def characters(
+    info: InfoFunc,
+    error: ErrorFunc,
+    otext: OtextData,
+    tFormats: dict[str, tuple[str, ...]],
+    *tFeats: tuple[str, dict[int, Any] | None],
+) -> CharactersResult:
     """Computes character data.
 
     For each text format, a frequency list of the characters in that format
@@ -415,20 +481,20 @@ def characters(info, error, otext, tFormats, *tFeats):
         of that character in the whole corpus when rendered with that format.
     """
 
-    charFreqsByFeature = {}
+    charFreqsByFeature: dict[str, dict[str, int]] = {}
 
     for tFeat, data in tFeats:
-        freqList = collections.Counter()
+        freqList: collections.Counter[Any] = collections.Counter()
         if data is not None:
             for v in data.values():
                 freqList[v] += 1
-        charFreq = collections.defaultdict(lambda: 0)
+        charFreq: dict[str, int] = collections.defaultdict(lambda: 0)
         for v, freq in freqList.items():
             for c in str(v):
                 charFreq[c] += freq
         charFreqsByFeature[tFeat] = charFreq
 
-    charFreqsByFmt = {}
+    charFreqsByFmt: dict[str, list[tuple[str, int]]] = {}
 
     for fmt, tFeatures in sorted(tFormats.items()):
         charFreq = collections.defaultdict(lambda: 0)
@@ -441,7 +507,13 @@ def characters(info, error, otext, tFormats, *tFeats):
     return charFreqsByFmt
 
 
-def boundary(info, error, otype, oslots, rank):
+def boundary(
+    info: InfoFunc,
+    error: ErrorFunc,
+    otype: OtypeData,
+    oslots: OslotsData,
+    rank: RankData,
+) -> BoundaryData:
     """Computes boundary data.
 
     For each slot, the nodes that start at that slot and the nodes that end
@@ -481,23 +553,23 @@ def boundary(info, error, otype, oslots, rank):
         Just for symmetry.
     """
 
-    (otype, maxSlot, maxNode, slotType) = otype
-    oslots = oslots[0]
-    firstSlotsD = {}
-    lastSlotsD = {}
+    (otype_data, maxSlot, maxNode, slotType) = otype
+    oslots_data = oslots[0]
+    firstSlotsD: dict[int, list[int]] = {}
+    lastSlotsD: dict[int, list[int]] = {}
 
-    for node, slots in enumerate(oslots):
+    for node, slots in enumerate(oslots_data):
         realNode = node + 1 + maxSlot
         firstSlotsD.setdefault(slots[0], []).append(realNode)
         lastSlotsD.setdefault(slots[-1], []).append(realNode)
 
-    firstSlots = tuple(
+    firstSlots: tuple[tuple[int, ...], ...] = tuple(
         tuple(sorted(firstSlotsD.get(n, []), key=lambda node: -rank[node - 1]))
         # array.array("I", sorted(firstSlotsD.get(n, []),
         # key=lambda node: -rank[node - 1]))
         for n in range(1, maxSlot + 1)
     )
-    lastSlots = tuple(
+    lastSlots: tuple[tuple[int, ...], ...] = tuple(
         tuple(sorted(lastSlotsD.get(n, []), key=lambda node: rank[node - 1]))
         # array.array("I", sorted(lastSlotsD.get(n, []),
         # key=lambda node: rank[node - 1]))
@@ -506,7 +578,17 @@ def boundary(info, error, otype, oslots, rank):
     return (firstSlots, lastSlots)
 
 
-def sections(info, error, otype, oslots, otext, levUp, levDown, levels, *sFeats):
+def sections(
+    info: InfoFunc,
+    error: ErrorFunc,
+    otype: OtypeData,
+    oslots: OslotsData,
+    otext: OtextData,
+    levUp: LevUpData,
+    levDown: LevDownData,
+    levels: LevelsData,
+    *sFeats: dict[int, Any],
+) -> SectionsResult:
     """Computes section data.
 
     TF datasets may define up to three section levels, roughly corresponding
@@ -576,15 +658,15 @@ def sections(info, error, otype, oslots, otext, levUp, levDown, levels, *sFeats)
 
     """
 
-    (otype, maxSlot, maxNode, slotType) = otype
-    oslots = oslots[0]
-    support = {level[0]: (level[2], level[3]) for level in levels}
-    sTypes = itemize(otext["sectionTypes"], ",")
-    sec1 = {}
-    sec2 = {}
-    seqFromNode = {}
-    nodeFromSeq = {}
-    nestingProblems = collections.Counter()
+    (otype_data, maxSlot, maxNode, slotType) = otype
+    oslots_data = oslots[0]
+    support: dict[str, tuple[int, int]] = {level[0]: (level[2], level[3]) for level in levels}
+    sTypes: list[str] = itemize(otext["sectionTypes"], ",")
+    sec1: dict[int, dict[Any, int]] = {}
+    sec2: dict[int, dict[Any, dict[Any, int]]] = {}
+    seqFromNode: dict[int, tuple[int, ...]] = {}
+    nodeFromSeq: dict[tuple[int, ...], int] = {}
+    nestingProblems: collections.Counter[str] = collections.Counter()
 
     if len(sTypes) < 2:
         pass
@@ -593,7 +675,7 @@ def sections(info, error, otype, oslots, otext, levUp, levDown, levels, *sFeats)
         c1 = 0
         support1 = support[sTypes[1]]
         for n1 in range(support1[0], support1[1] + 1):
-            n0s = tuple(x for x in levUp[n1 - 1] if otype[x - maxSlot - 1] == sTypes[0])
+            n0s = tuple(x for x in levUp[n1 - 1] if otype_data[x - maxSlot - 1] == sTypes[0])
             if not n0s:
                 nestingProblems[
                     f"section {sTypes[1]} without containing {sTypes[0]}"
@@ -615,7 +697,7 @@ def sections(info, error, otype, oslots, otext, levUp, levDown, levels, *sFeats)
         c2 = 0
         support2 = support[sTypes[2]]
         for n2 in range(support2[0], support2[1] + 1):
-            n0s = tuple(x for x in levUp[n2 - 1] if otype[x - maxSlot - 1] == sTypes[0])
+            n0s = tuple(x for x in levUp[n2 - 1] if otype_data[x - maxSlot - 1] == sTypes[0])
             if not n0s:
                 nestingProblems[
                     f"section {sTypes[2]} without containing {sTypes[0]}"
@@ -623,7 +705,7 @@ def sections(info, error, otype, oslots, otext, levUp, levDown, levels, *sFeats)
                 continue
             n0 = n0s[0]
 
-            n1s = tuple(x for x in levUp[n2 - 1] if otype[x - maxSlot - 1] == sTypes[1])
+            n1s = tuple(x for x in levUp[n2 - 1] if otype_data[x - maxSlot - 1] == sTypes[1])
             if not n1s:
                 nestingProblems[
                     f"section {sTypes[2]} without containing {sTypes[1]}"
@@ -666,7 +748,7 @@ def sections(info, error, otype, oslots, otext, levUp, levDown, levels, *sFeats)
             for n1 in (
                 x
                 for x in levDown[n0 - maxSlot - 1]
-                if otype[x - maxSlot - 1] == sTypes[1]
+                if otype_data[x - maxSlot - 1] == sTypes[1]
             ):
                 c1 += 1
                 c2 = 0
@@ -676,7 +758,7 @@ def sections(info, error, otype, oslots, otext, levUp, levDown, levels, *sFeats)
                 for n2 in (
                     x
                     for x in levDown[n1 - maxSlot - 1]
-                    if otype[x - maxSlot - 1] == sTypes[2]
+                    if otype_data[x - maxSlot - 1] == sTypes[2]
                 ):
                     c2 += 1
                     seqFromNode[n2] = (c0, c1, c2)
@@ -685,7 +767,11 @@ def sections(info, error, otype, oslots, otext, levUp, levDown, levels, *sFeats)
     return dict(sec1=sec1, sec2=sec2, seqFromNode=seqFromNode, nodeFromSeq=nodeFromSeq)
 
 
-def sectionsFromApi(api, sectionTypes, sectionFeats):
+def sectionsFromApi(
+    api: Api,
+    sectionTypes: list[str],
+    sectionFeats: list[str],
+) -> SectionsResult | None:
     """Compute sections data using API methods.
 
     This is an alternative to `sections()` that works with the high-level API
@@ -708,10 +794,10 @@ def sectionsFromApi(api, sectionTypes, sectionFeats):
     if len(sectionTypes) < 2 or len(sectionFeats) < 2:
         return None
 
-    sec1 = {}
-    sec2 = {}
-    seqFromNode = {}
-    nodeFromSeq = {}
+    sec1: dict[int, dict[Any, int]] = {}
+    sec2: dict[int, dict[Any, dict[Any, int]]] = {}
+    seqFromNode: dict[int, tuple[int, ...]] = {}
+    nodeFromSeq: dict[tuple[int, ...], int] = {}
 
     F = api.F
     L = api.L
@@ -753,7 +839,16 @@ def sectionsFromApi(api, sectionTypes, sectionFeats):
     return dict(sec1=sec1, sec2=sec2, seqFromNode=seqFromNode, nodeFromSeq=nodeFromSeq)
 
 
-def structure(info, error, otype, oslots, otext, rank, levUp, *sFeats):
+def structure(
+    info: InfoFunc,
+    error: ErrorFunc,
+    otype: OtypeData,
+    oslots: OslotsData,
+    otext: OtextData,
+    rank: RankData,
+    levUp: LevUpData,
+    *sFeats: dict[int, Any],
+) -> StructureResult | tuple[dict[Any, Any], dict[Any, Any]]:
     """Computes structure data.
 
     If the corpus has a rich section structure, it is possible to define
@@ -806,9 +901,9 @@ def structure(info, error, otype, oslots, otext, rank, levUp, *sFeats):
     is the  section key.
     """
 
-    (otype, maxSlot, maxNode, slotType) = otype
-    oslots = oslots[0]
-    sTypeList = itemize(otext["structureTypes"], ",")
+    (otype_data, maxSlot, maxNode, slotType) = otype
+    oslots_data = oslots[0]
+    sTypeList: list[str] = itemize(otext["structureTypes"], ",")
     nsTypes = len(sTypeList)
     nsFeats = len(sFeats)
 
@@ -823,28 +918,28 @@ def structure(info, error, otype, oslots, otext, rank, levUp, *sFeats):
         error("WARNING: duplicate structure levels")
         return ({}, {})
 
-    higherTypes = collections.defaultdict(set)
+    higherTypes: dict[str, set[str]] = collections.defaultdict(set)
     for i, highType in enumerate(sTypeList):
         for lowType in sTypeList[i:]:
             higherTypes[lowType].add(highType)
 
-    featFromType = {sTypeList[i]: sFeats[i] for i in range(nsTypes)}
+    featFromType: dict[str, dict[int, Any]] = {sTypeList[i]: sFeats[i] for i in range(nsTypes)}
 
-    multiple = collections.defaultdict(list)
-    headingFromNode = {}
-    nodeFromHeading = {}
+    multiple: dict[tuple[tuple[str, Any], ...], list[int]] = collections.defaultdict(list)
+    headingFromNode: dict[int, tuple[tuple[str, Any], ...]] = {}
+    nodeFromHeading: dict[tuple[tuple[str, Any], ...], int] = {}
 
     for n in range(maxSlot + 1, maxNode + 1):
-        nType = otype[n - maxSlot - 1]
+        nType = otype_data[n - maxSlot - 1]
         if nType not in sTypes:
             continue
-        ups = (u for u in levUp[n - 1] if otype[u - maxSlot - 1] in higherTypes[nType])
-        sKey = tuple(
+        ups = (u for u in levUp[n - 1] if otype_data[u - maxSlot - 1] in higherTypes[nType])
+        sKey: tuple[tuple[str, Any], ...] = tuple(
             reversed(
                 tuple(
                     (
-                        otype[x - maxSlot - 1],
-                        featFromType[otype[x - maxSlot - 1]].get(x, None),
+                        otype_data[x - maxSlot - 1],
+                        featFromType[otype_data[x - maxSlot - 1]].get(x, None),
                     )
                     for x in (n, *ups)
                 )
@@ -857,24 +952,24 @@ def structure(info, error, otype, oslots, otext, rank, levUp, *sFeats):
             multiple[sKey].append(n)
         nodeFromHeading[sKey] = n
         headingFromNode[n] = sKey
-    multiple = {
+    multiple_final: dict[tuple[tuple[str, Any], ...], tuple[int, ...]] = {
         sKey: tuple(sorted(ns, key=lambda n: rank[n - 1]))
         for (sKey, ns) in multiple.items()
     }
 
-    top = tuple(
+    top: tuple[int, ...] = tuple(
         sorted(
             (n for (n, h) in headingFromNode.items() if len(h) == 1),
             key=lambda n: rank[n - 1],
         )
     )
 
-    up = {}
+    up: dict[int, int] = {}
     for n, heading in headingFromNode.items():
         lHeading = len(heading)
         if lHeading == 1:
             continue
-        upNode = None
+        upNode: int | None = None
         for i in range(lHeading - 1, 0, -1):
             upHeading = heading[0:i]
             upNode = nodeFromHeading.get(upHeading, None)
@@ -882,12 +977,12 @@ def structure(info, error, otype, oslots, otext, rank, levUp, *sFeats):
                 up[n] = upNode
                 break
 
-    down = {}
+    down: dict[int, list[int]] = {}
     for n, heading in headingFromNode.items():
         if len(heading) == 1:
             continue
         down.setdefault(up[n], []).append(n)
 
-    down = {n: tuple(sorted(ms, key=lambda m: rank[m - 1])) for (n, ms) in down.items()}
+    down_final: dict[int, tuple[int, ...]] = {n: tuple(sorted(ms, key=lambda m: rank[m - 1])) for (n, ms) in down.items()}
 
-    return (headingFromNode, nodeFromHeading, multiple, top, up, down)
+    return (headingFromNode, nodeFromHeading, multiple_final, top, up, down_final)

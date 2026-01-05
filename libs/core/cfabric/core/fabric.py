@@ -11,8 +11,10 @@ This module defines `Fabric`, which provides:
 
 import collections
 from itertools import chain
-from typing import Dict, Union, Set
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
+import numpy as np
 from pathlib import Path
 
 from cfabric.core.config import BANNER, VERSION, OTYPE, OSLOTS, OTEXT, CFM_VERSION
@@ -72,11 +74,11 @@ from cfabric.core.api import (
     addSearch,
 )
 
-# declare some types for type annotation
-featureType = Union[str, int]
-nodeFeatureDict = Dict[str, Dict[int, featureType]]
-edgeFeatureDict = Dict[str, Dict[int, Union[Set[int], Dict[int, featureType]]]]
-metaDataDict = Dict[str, Dict[str, str]]
+# Type aliases for feature data structures
+FeatureValue = str | int
+NodeFeatureDict = dict[str, dict[int, FeatureValue]]
+EdgeFeatureDict = dict[str, dict[int, set[int] | dict[int, FeatureValue]]]
+MetaDataDict = dict[str, dict[str, str]]
 
 
 OTEXT_DEFAULT = dict(sectionFeatures="", sectionTypes="")
@@ -208,7 +210,13 @@ class Fabric:
         An object from which you can call up all the of methods of the core API.
     """
 
-    def __init__(self, locations=None, modules=None, silent=SILENT_D, _withGc=False):
+    def __init__(
+        self,
+        locations: str | Iterable[str] | None = None,
+        modules: str | Iterable[str] | None = None,
+        silent: str = SILENT_D,
+        _withGc: bool = False,
+    ) -> None:
         silent = silentConvert(silent)
         self._withGc = _withGc
         self.silent = silent
@@ -286,7 +294,12 @@ class Fabric:
 
         self._makeIndex()
 
-    def load(self, features, add=False, silent=SILENT_D):
+    def load(
+        self,
+        features: str | Iterable[str],
+        add: bool = False,
+        silent: str = SILENT_D,
+    ) -> Api | bool:
         """Loads features from disk into RAM memory.
 
         Automatically uses memory-mapped .cfm format when available for faster
@@ -475,7 +488,9 @@ class Fabric:
         setSilent(wasSilent)
         return result
 
-    def explore(self, silent=SILENT_D, show=True):
+    def explore(
+        self, silent: str = SILENT_D, show: bool = True
+    ) -> dict[str, tuple[str, ...]] | None:
         """Makes categorization of all features in the dataset.
 
         Parameters
@@ -552,7 +567,7 @@ class Fabric:
                 )
             )
 
-    def loadAll(self, silent=SILENT_D):
+    def loadAll(self, silent: str = SILENT_D) -> Api | bool:
         """Load all loadable features.
 
         Parameters
@@ -572,13 +587,13 @@ class Fabric:
 
     def save(
         self,
-        nodeFeatures: nodeFeatureDict = {},
-        edgeFeatures: edgeFeatureDict = {},
-        metaData: metaDataDict = {},
-        location=None,
-        module=None,
-        silent=SILENT_D,
-    ):
+        nodeFeatures: NodeFeatureDict | None = None,
+        edgeFeatures: EdgeFeatureDict | None = None,
+        metaData: MetaDataDict | None = None,
+        location: str | None = None,
+        module: str | None = None,
+        silent: str = SILENT_D,
+    ) -> bool:
         """Saves newly generated data to disk as TF features, nodes and / or edges.
 
         If you have collected feature data in dictionaries, keyed by the
@@ -656,6 +671,13 @@ class Fabric:
         silent: string, optional cfabric.timestamp.SILENT_D
             See `cfabric.timestamp.Timestamp`
         """
+
+        if nodeFeatures is None:
+            nodeFeatures = {}
+        if edgeFeatures is None:
+            edgeFeatures = {}
+        if metaData is None:
+            metaData = {}
 
         silent = silentConvert(silent)
         tmObj = self.tmObj
@@ -797,9 +819,9 @@ class Fabric:
         setSilent(wasSilent)
         return good
 
-    def _loadFeature(self, fName, optional=False):
+    def _loadFeature(self, fName: str, optional: bool = False) -> None:
         if not self.good:
-            return False
+            return
 
         tmObj = self.tmObj
         isSilent = tmObj.isSilent
@@ -814,7 +836,7 @@ class Fabric:
             if not self.features[fName].load(silent=silent, _withGc=self._withGc):
                 self.good = False
 
-    def _makeIndex(self):
+    def _makeIndex(self) -> None:
         tmObj = self.tmObj
         info = tmObj.info
         debug = tmObj.debug
@@ -905,7 +927,7 @@ class Fabric:
                 self.precomputeList.append((fName, dep2))
         self.good = good
 
-    def _getWriteLoc(self, location=None, module=None):
+    def _getWriteLoc(self, location: str | None = None, module: str | None = None) -> None:
         writeLoc = (
             ex(location)
             if location is not None
@@ -926,7 +948,7 @@ class Fabric:
             else f"{writeLoc}/{writeMod}"
         )
 
-    def _precompute(self):
+    def _precompute(self) -> None:
         tmObj = self.tmObj
         isSilent = tmObj.isSilent
         good = True
@@ -940,7 +962,7 @@ class Fabric:
                 break
         self.good = good
 
-    def _makeApi(self):
+    def _makeApi(self) -> Api | None:
         if not self.good:
             return None
 
@@ -1033,7 +1055,7 @@ class Fabric:
         setattr(self, "isLoaded", self.api.isLoaded)
         return api
 
-    def _updateApi(self):
+    def _updateApi(self) -> None:
         if not self.good:
             return None
         api = self.api
@@ -1074,7 +1096,7 @@ class Fabric:
         indent(level=0)
         debug("All additional features loaded - for details use TF.isLoaded()")
 
-    def _detect_cfm(self):
+    def _detect_cfm(self) -> Path | None:
         """Check if .cfm directory exists for the corpus.
 
         Returns
@@ -1089,7 +1111,7 @@ class Fabric:
                     return cfm_path
         return None
 
-    def compile(self, output_dir=None, silent=SILENT_D):
+    def compile(self, output_dir: str | None = None, silent: str = SILENT_D) -> bool:
         """Compile .tf files to .cfm mmap format.
 
         Compiles Text-Fabric source files into the Context Fabric memory-mapped
@@ -1127,7 +1149,7 @@ class Fabric:
         setSilent(wasSilent)
         return result
 
-    def _makeApiFromCfm(self, mmap_mgr):
+    def _makeApiFromCfm(self, mmap_mgr: MmapManager) -> Api | None:
         """Build API from memory-mapped .cfm data.
 
         Parameters
@@ -1234,14 +1256,14 @@ class Fabric:
 
         return api
 
-    def _feature_meta_from_cfm(self, mmap_mgr, fname):
+    def _feature_meta_from_cfm(self, mmap_mgr: MmapManager, fname: str) -> dict[str, str]:
         """Get feature metadata from .cfm directory."""
         try:
             return mmap_mgr.get_json('features', f'{fname}_meta')
         except FileNotFoundError:
             return {}
 
-    def _loadComputedFromCfm(self, api, mmap_mgr):
+    def _loadComputedFromCfm(self, api: Api, mmap_mgr: MmapManager) -> None:
         """Load computed data (C.*) from .cfm format."""
         computed_dir = mmap_mgr.cfm_path / 'computed'
 
@@ -1281,7 +1303,14 @@ class Fabric:
         except FileNotFoundError:
             pass
 
-    def _setupOtypeSupport(self, otype_feature, otype_arr, type_list, max_slot, max_node):
+    def _setupOtypeSupport(
+        self,
+        otype_feature: OtypeFeature,
+        otype_arr: np.ndarray,
+        type_list: list[str],
+        max_slot: int,
+        max_node: int,
+    ) -> None:
         """Setup the support dict for otype.s() method."""
         import numpy as np
 
@@ -1307,7 +1336,7 @@ class Fabric:
 
         otype_feature.support = support
 
-    def _loadNodeFeatureFromCfm(self, api, mmap_mgr, fname):
+    def _loadNodeFeatureFromCfm(self, api: Api, mmap_mgr: MmapManager, fname: str) -> None:
         """Load a node feature from .cfm format."""
         features_dir = mmap_mgr.cfm_path / 'features'
 
@@ -1330,7 +1359,7 @@ class Fabric:
 
         setattr(api.F, fname, feature)
 
-    def _loadEdgeFeatureFromCfm(self, api, mmap_mgr, fname):
+    def _loadEdgeFeatureFromCfm(self, api: Api, mmap_mgr: MmapManager, fname: str) -> None:
         """Load an edge feature from .cfm format."""
         from cfabric.storage.csr import CSRArrayWithValues
 

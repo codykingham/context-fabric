@@ -6,8 +6,15 @@ integer indices into a shared string pool. This approach minimizes memory
 usage when many nodes share the same string values.
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterator
+from typing import TYPE_CHECKING
+
 import numpy as np
-from typing import Optional
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 # Sentinel for missing string index
 MISSING_STR_INDEX = 0xFFFFFFFF
@@ -29,7 +36,11 @@ class StringPool:
         MISSING_STR_INDEX indicates no value
     """
 
-    def __init__(self, strings: np.ndarray, indices: np.ndarray):
+    def __init__(
+        self,
+        strings: NDArray[np.object_],
+        indices: NDArray[np.uint32],
+    ) -> None:
         """
         Initialize a StringPool.
 
@@ -43,7 +54,7 @@ class StringPool:
         self.strings = strings
         self.indices = indices
 
-    def get(self, node: int) -> Optional[str]:
+    def get(self, node: int) -> str | None:
         """
         Get string value for node (1-indexed).
 
@@ -54,7 +65,7 @@ class StringPool:
 
         Returns
         -------
-        Optional[str]
+        str | None
             String value or None if missing
         """
         idx = self.indices[node - 1]
@@ -62,7 +73,7 @@ class StringPool:
             return None
         return self.strings[idx]
 
-    def __getitem__(self, node: int) -> Optional[str]:
+    def __getitem__(self, node: int) -> str | None:
         """
         Get string value for node using bracket notation.
 
@@ -73,7 +84,7 @@ class StringPool:
 
         Returns
         -------
-        Optional[str]
+        str | None
             String value or None if missing
         """
         return self.get(node)
@@ -89,7 +100,7 @@ class StringPool:
         """
         return len(self.indices)
 
-    def items(self):
+    def items(self) -> Iterator[tuple[int, str]]:
         """
         Iterate over (node, value) pairs efficiently using numpy.
 
@@ -97,7 +108,7 @@ class StringPool:
 
         Yields
         ------
-        tuple
+        tuple[int, str]
             (node, string_value) pairs
         """
         # Use numpy to find all nodes with values (vectorized, fast)
@@ -109,25 +120,25 @@ class StringPool:
             string_idx = self.indices[idx]
             yield (node, self.strings[string_idx])
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[int, str]:
         """
         Convert to dict efficiently.
 
         Returns
         -------
-        dict
+        dict[int, str]
             Mapping from node to string value
         """
         return dict(self.items())
 
     @classmethod
-    def from_dict(cls, data: dict, max_node: int) -> 'StringPool':
+    def from_dict(cls, data: dict[int, str], max_node: int) -> StringPool:
         """
         Build string pool from node->string dict.
 
         Parameters
         ----------
-        data : dict
+        data : dict[int, str]
             Mapping from node (int) to string value
         max_node : int
             Maximum node number in corpus
@@ -162,7 +173,7 @@ class StringPool:
         np.save(f"{path_prefix}_idx.npy", self.indices)
 
     @classmethod
-    def load(cls, path_prefix: str, mmap_mode: str = 'r') -> 'StringPool':
+    def load(cls, path_prefix: str, mmap_mode: str = 'r') -> StringPool:
         """
         Load from files.
 
@@ -199,7 +210,7 @@ class IntFeatureArray:
 
     MISSING = -1
 
-    def __init__(self, values: np.ndarray):
+    def __init__(self, values: NDArray[np.int32]) -> None:
         """
         Initialize an IntFeatureArray.
 
@@ -210,7 +221,7 @@ class IntFeatureArray:
         """
         self.values = values
 
-    def get(self, node: int) -> Optional[int]:
+    def get(self, node: int) -> int | None:
         """
         Get int value for node (1-indexed).
 
@@ -221,7 +232,7 @@ class IntFeatureArray:
 
         Returns
         -------
-        Optional[int]
+        int | None
             Integer value or None if missing
         """
         val = self.values[node - 1]
@@ -229,7 +240,7 @@ class IntFeatureArray:
             return None
         return int(val)
 
-    def __getitem__(self, node: int) -> Optional[int]:
+    def __getitem__(self, node: int) -> int | None:
         """
         Get int value for node using bracket notation.
 
@@ -240,7 +251,7 @@ class IntFeatureArray:
 
         Returns
         -------
-        Optional[int]
+        int | None
             Integer value or None if missing
         """
         return self.get(node)
@@ -256,7 +267,7 @@ class IntFeatureArray:
         """
         return len(self.values)
 
-    def items(self):
+    def items(self) -> Iterator[tuple[int, int]]:
         """
         Iterate over (node, value) pairs efficiently using numpy.
 
@@ -264,7 +275,7 @@ class IntFeatureArray:
 
         Yields
         ------
-        tuple
+        tuple[int, int]
             (node, int_value) pairs
         """
         # Use numpy to find all nodes with values (vectorized, fast)
@@ -275,25 +286,25 @@ class IntFeatureArray:
             node = idx + 1  # Convert 0-indexed to 1-indexed
             yield (node, int(self.values[idx]))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[int, int]:
         """
         Convert to dict efficiently.
 
         Returns
         -------
-        dict
+        dict[int, int]
             Mapping from node to int value
         """
         return dict(self.items())
 
     @classmethod
-    def from_dict(cls, data: dict, max_node: int) -> 'IntFeatureArray':
+    def from_dict(cls, data: dict[int, int | None], max_node: int) -> IntFeatureArray:
         """
         Build from node->int dict.
 
         Parameters
         ----------
-        data : dict
+        data : dict[int, int | None]
             Mapping from node (int) to integer value (or None for missing)
         max_node : int
             Maximum node number in corpus
@@ -322,7 +333,7 @@ class IntFeatureArray:
         np.save(path, self.values)
 
     @classmethod
-    def load(cls, path: str, mmap_mode: str = 'r') -> 'IntFeatureArray':
+    def load(cls, path: str, mmap_mode: str = 'r') -> IntFeatureArray:
         """
         Load from .npy file.
 

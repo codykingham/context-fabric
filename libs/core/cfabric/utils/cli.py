@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import sys
 from textwrap import dedent
+from typing import Any
 
 from cfabric.utils.helpers import console
 
@@ -8,8 +11,13 @@ from cfabric.utils.helpers import console
 
 
 def readArgs(
-    command, descr, possibleTasks, possibleParams, possibleFlags, notInAll=set()
-):
+    command: str,
+    descr: str,
+    possibleTasks: dict[str, str],
+    possibleParams: dict[str, tuple[str, str]],
+    possibleFlags: dict[str, tuple[str, int | bool, int]],
+    notInAll: set[str] = set()
+) -> tuple[bool, dict[str, bool], dict[str, str], dict[str, int | bool]]:
     """Interpret tasks, parameters and flags specified.
 
     Parameters
@@ -48,8 +56,8 @@ def readArgs(
         *   a dict of the flags, values are -1, 0 or 1
     """
 
-    taskArgs = set()
-    helpTasks = []
+    taskArgs: set[str] = set()
+    helpTasks: list[str] = []
 
     for task, helpStr in possibleTasks.items():
         helpTasks.append(f"\t{task}:\n\t\t{helpStr}\n")
@@ -59,20 +67,20 @@ def readArgs(
     helpTasks.append(f"all:\n\t\tall tasks{notInAllRep}")
     taskArgs.add("all")
 
-    paramArgsDef = {}
-    helpParams = []
+    paramArgsDef: dict[str, str] = {}
+    helpParams: list[str] = []
 
     for param, (helpStr, default) in possibleParams.items():
         helpParams.append(f"\t{param}={default}:\n\t\t{helpStr}\n")
         paramArgsDef[param] = default
 
-    flagArgsDef = {}
-    flagArgs = {}
-    helpFlags = []
+    flagArgsDef: dict[str, int | bool] = {}
+    flagArgs: dict[str, int | bool] = {}
+    helpFlags: list[str] = []
 
     for flag, (helpStr, default, nValues) in possibleFlags.items():
         helpFlags.append(f"\t{flag}={default}:\n\t\t{helpStr}\n")
-        valueCoding = (
+        valueCoding: tuple[tuple[str, int | bool, str], ...] | None = (
             (("-", False, "no"), ("+", True, "yes"))
             if nValues == 2
             else (("-", -1, "no"), ("+", 0, "a bit"), ("++", 1, "more"))
@@ -125,9 +133,9 @@ def readArgs(
             console(f"Illegal argument `{arg}`")
         return (False, {}, {}, {})
 
-    tasks = {}
-    flags = {}
-    params = {}
+    tasks: dict[str, bool] = {}
+    flags: dict[str, int | bool] = {}
+    params: dict[str, str] = {}
 
     for arg in args:
         if arg in taskArgs:

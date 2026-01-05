@@ -2,11 +2,18 @@
 # Search by relational patterns between nodes
 """
 
+from __future__ import annotations
+
 import collections
 import types
 import re
 from itertools import chain
 import array
+from typing import TYPE_CHECKING, Any, Callable, Iterator
+
+if TYPE_CHECKING:
+    from cfabric.core.api import Api
+    from cfabric.search.searchexe import SearchExe
 
 from cfabric.core.config import OTYPE, OSLOTS, OMAP
 from cfabric.utils.helpers import makeIndex
@@ -16,41 +23,41 @@ from cfabric.search.syntax import reTp
 # LOW-LEVEL NODE RELATIONS SEMANTICS ###
 
 
-def _l_em(n):
+def _l_em(n: int) -> tuple[()]:
     return ()
 
 
-def _l_eq(n):
+def _l_eq(n: int) -> tuple[int]:
     return (n,)
 
 
-def _l_uneq(n, m):
+def _l_uneq(n: int, m: int) -> bool:
     return n != m
 
 
-def _l_lt(n, m):
+def _l_lt(n: int, m: int) -> bool:
     return n < m
 
 
-def _l_gt(n, m):
+def _l_gt(n: int, m: int) -> bool:
     return n > m
 
 
-def _l_ranklt(Crank):
-    def func(n, m):
+def _l_ranklt(Crank: array.array[int]) -> Callable[[int, int], bool]:
+    def func(n: int, m: int) -> bool:
         return Crank[n - 1] < Crank[m - 1]
 
     return func
 
 
-def _l_rankgt(Crank):
-    def func(n, m):
+def _l_rankgt(Crank: array.array[int]) -> Callable[[int, int], bool]:
+    def func(n: int, m: int) -> bool:
         return Crank[n - 1] > Crank[m - 1]
 
     return func
 
 
-def basicRelations(searchExe, api):
+def basicRelations(searchExe: SearchExe, api: Api) -> None:
     C = api.C
     F = api.F
     Fs = api.Fs
@@ -1644,9 +1651,9 @@ One of the above relations on nodes and / or slots will suit you better.
     searchExe.nodeMap = nodeMap
 
 
-def add_K_Relations(searchExe, varRels):
+def add_K_Relations(searchExe: SearchExe, varRels: dict[str, set[int]]) -> None:
     relations = searchExe.relations
-    tasks = collections.defaultdict(set)
+    tasks: dict[tuple[int, str, int, str], set[int]] = collections.defaultdict(set)
     for acro, ks in varRels.items():
         j = searchExe.relationFromName[acro]
         ji = searchExe.converse[j]
@@ -1687,9 +1694,9 @@ def add_K_Relations(searchExe, varRels):
             searchExe.converse[lr + 1] = lr
 
 
-def add_F_Relations(searchExe, varRels):
+def add_F_Relations(searchExe: SearchExe, varRels: dict[str, set[Any]]) -> None:
     relations = searchExe.relations
-    tasks = collections.defaultdict(set)
+    tasks: dict[tuple[int, str, int, str], set[Any]] = collections.defaultdict(set)
     for acro, feats in varRels.items():
         j = searchExe.relationFromName[acro]
         ji = searchExe.converse[j]
@@ -1758,9 +1765,9 @@ def add_F_Relations(searchExe, varRels):
             searchExe.converse[lr + 1] = lr
 
 
-def add_V_Relations(searchExe, varRels):
+def add_V_Relations(searchExe: SearchExe, varRels: dict[str, set[Any]]) -> None:
     relations = searchExe.relations
-    tasks = collections.defaultdict(set)
+    tasks: dict[tuple[str, int, str, int, str], set[Any]] = collections.defaultdict(set)
     for acro, vals in sorted(varRels.items()):
         for eName, val in vals:
             (b, mid, e) = (acro[0], acro[1:-1], acro[-1])

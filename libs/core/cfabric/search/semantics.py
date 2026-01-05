@@ -2,8 +2,14 @@
 # Semantics of search templates
 """
 
+from __future__ import annotations
+
 import types
 import re
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from cfabric.search.searchexe import SearchExe
 
 from cfabric.search.relations import add_K_Relations, add_F_Relations, add_V_Relations
 from cfabric.search.syntax import reTp, kRe, deContext
@@ -11,7 +17,7 @@ from cfabric.search.syntax import reTp, kRe, deContext
 # SEMANTIC ANALYSIS OF SEARCH TEMPLATE ###
 
 
-def semantics(searchExe):
+def semantics(searchExe: SearchExe) -> None:
     if not searchExe.good:
         return
     error = searchExe.api.TF.error
@@ -41,17 +47,17 @@ def semantics(searchExe):
             error(txt, tm=False, cache=_msgCache)
 
 
-def _grammar(searchExe):
-    prevKind = None
-    good = True
-    qnames = {}
-    qnodes = []
-    qedges = []
-    edgeLine = {}
-    nodeLine = {}
-    nTokens = len(searchExe.tokens)
+def _grammar(searchExe: SearchExe) -> None:
+    prevKind: str | None = None
+    good: bool = True
+    qnames: dict[str, int] = {}
+    qnodes: list[tuple[str, dict[str, Any], str, list[Any]]] = []
+    qedges: list[tuple[int, str | tuple[str, dict[str, Any]], int]] = []
+    edgeLine: dict[int, int] = {}
+    nodeLine: dict[int, int] = {}
+    nTokens: int = len(searchExe.tokens)
 
-    def tokenSort(t):
+    def tokenSort(t: dict[str, Any]) -> int:
         return (nTokens + t["ln"]) if t["kind"] == "rel" else t["ln"]
 
     tokens = sorted(searchExe.tokens, key=tokenSort)
@@ -218,15 +224,17 @@ def _grammar(searchExe):
 
 
 def _validateFeature(
-    searchExe,
-    q,
-    fName,
-    features,
-    missingFeatures,
-    wrongValues,
-    hasValues={},
-    asEdge=False,
-):
+    searchExe: SearchExe,
+    q: int,
+    fName: str,
+    features: dict[str, Any],
+    missingFeatures: dict[str, list[int]],
+    wrongValues: dict[str, dict[Any, list[int]]],
+    hasValues: dict[str, dict[Any, list[int]]] | None = None,
+    asEdge: bool = False,
+) -> None:
+    if hasValues is None:
+        hasValues = {}
     values = features[fName]
     fSet = "edges" if asEdge else "nodes"
     if fName not in searchExe.api.TF.featureSets[fSet]:
@@ -265,7 +273,7 @@ def _validateFeature(
                     features[fName] = (ident, frozenset(valuesCast))
 
 
-def _validation(searchExe):
+def _validation(searchExe: SearchExe) -> None:
     levels = searchExe.api.C.levels.data
     otypes = {x[0] for x in levels}
     qnodes = searchExe.qnodes

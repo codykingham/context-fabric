@@ -4,8 +4,15 @@
 It provides methods to navigate nodes and edges and lookup features.
 """
 
+from __future__ import annotations
+
 import collections
+from collections.abc import Iterable
 from textwrap import wrap, dedent
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from cfabric.core.fabric import Fabric
 
 from cfabric.utils.helpers import flattenToSet, console, fitemize, deepSize
 from cfabric.utils.files import unexpanduser as ux
@@ -52,7 +59,7 @@ API_REFS = dict(
 
 
 class Api:
-    def __init__(self, TF):
+    def __init__(self, TF: Fabric) -> None:
         self.TF = TF
         self.ignored = tuple(sorted(TF.featuresIgnored))
         """Which features were found but ignored.
@@ -98,7 +105,7 @@ class Api:
         setattr(self, "AllComputeds", self.Call)
         setattr(self, "loadLog", self.isLoaded)
 
-    def Fs(self, fName, warn=True):
+    def Fs(self, fName: str, warn: bool = True) -> Any:
         """Get the node feature sub API.
 
         If feature name is not a valid python identifier,
@@ -124,7 +131,7 @@ class Api:
             return None
         return getattr(self.F, fName)
 
-    def Es(self, fName, warn=True):
+    def Es(self, fName: str, warn: bool = True) -> Any:
         """Get the edge feature sub API.
 
         If feature name is not a valid python identifier,
@@ -150,7 +157,7 @@ class Api:
             return None
         return getattr(self.E, fName)
 
-    def Cs(self, fName, warn=True):
+    def Cs(self, fName: str, warn: bool = True) -> Any:
         """Get the computed data sub API.
 
         If component name is not a valid python identifier,
@@ -176,7 +183,7 @@ class Api:
             return None
         return getattr(self.C, fName)
 
-    def Fall(self, warp=True):
+    def Fall(self, warp: bool = True) -> list[str]:
         """Returns a sorted list of all usable, loaded node feature names.
 
         Parameters
@@ -187,7 +194,7 @@ class Api:
 
         return sorted(x[0] for x in self.F.__dict__.items() if warp or x[0] != OTYPE)
 
-    def Eall(self, warp=True):
+    def Eall(self, warp: bool = True) -> list[str]:
         """Returns a sorted list of all usable, loaded edge feature names.
 
         Parameters
@@ -198,14 +205,19 @@ class Api:
 
         return sorted(x[0] for x in self.E.__dict__.items() if warp or x[0] != OSLOTS)
 
-    def Call(self):
+    def Call(self) -> list[str]:
         """Returns a sorted list of all usable, loaded computed data names."""
 
         return sorted(x[0] for x in self.C.__dict__.items())
 
     def isLoaded(
-        self, features=None, pretty=True, valueType=True, path=False, meta="description"
-    ):
+        self,
+        features: Iterable[str] | str | None = None,
+        pretty: bool = True,
+        valueType: bool = True,
+        path: bool = False,
+        meta: str | list[str] | bool = "description",
+    ) -> dict[str, dict[str, Any] | None] | None:
         """Show information about loaded features.
 
         Parameters
@@ -377,7 +389,7 @@ class Api:
             return None
         return info
 
-    def makeAvailableIn(self, scope):
+    def makeAvailableIn(self, scope: dict[str, Any]) -> list[tuple[str, str, tuple[str, ...]]]:
         """Exports members of the API to the global namespace.
 
         Only the members whose names start with a capital are exported.
@@ -451,7 +463,7 @@ class Api:
     # docs
     # (Features, node-features, ('F ...', ...))
 
-    def ensureLoaded(self, features):
+    def ensureLoaded(self, features: str | Iterable[str]) -> set[str]:
         """Checks if features are loaded and if not loads them.
 
         All features in question will be made available to the core API.
@@ -496,7 +508,7 @@ class Api:
             loadedFeatures |= needToLoad
         return loadedFeatures
 
-    def footprint(self, recompute=False, bySize=True):
+    def footprint(self, recompute: bool = False, bySize: bool = True) -> None:
         """Computes the memory footprint in RAM of the loaded TF data.
 
         This includes the pre-computed data.
@@ -558,29 +570,29 @@ class Api:
         print(header + material)
 
 
-def addOtype(api):
+def addOtype(api: Api) -> None:
     setattr(api.F.otype, "all", tuple(o[0] for o in api.C.levels.data))
     setattr(
         api.F.otype, "support", dict(((o[0], (o[2], o[3])) for o in api.C.levels.data))
     )
 
 
-def addLocality(api):
+def addLocality(api: Api) -> None:
     api.L = Locality(api)
     api.Locality = api.L
 
 
-def addNodes(api):
+def addNodes(api: Api) -> None:
     api.N = Nodes(api)
     api.Nodes = api.N
 
 
-def addText(api):
+def addText(api: Api) -> None:
     api.T = Text(api)
     api.Text = api.T
 
 
-def addSearch(api, silent=SILENT_D):
+def addSearch(api: Api, silent: str = SILENT_D) -> None:
     silent = silentConvert(silent)
     api.S = Search(api, silent)
     api.Search = api.S

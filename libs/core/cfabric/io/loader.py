@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import array
 import collections
 import time
+from typing import TYPE_CHECKING, Any, Callable
+
 from cfabric.core.config import (
     OTYPE,
     OSLOTS,
@@ -27,6 +31,10 @@ from cfabric.utils.files import (
 )
 from cfabric.utils.timestamp import SILENT_D, silentConvert
 
+if TYPE_CHECKING:
+    from io import TextIOWrapper
+    from cfabric.utils.timestamp import Timestamp
+
 ERROR_CUTOFF = 20
 
 DATA_TYPES = ("str", "int")
@@ -44,35 +52,42 @@ FATAL_MSG = "There was a fatal error! The message is:\n"
 class Data:
     def __init__(
         self,
-        path,
-        tmObj,
-        edgeValues=False,
-        data=None,
-        isEdge=None,
-        isConfig=None,
-        metaData={},
-        method=None,
-        dependencies=None,
-    ):
+        path: str,
+        tmObj: Timestamp,
+        edgeValues: bool = False,
+        data: dict[int, Any] | tuple[Any, ...] | None = None,
+        isEdge: bool | None = None,
+        isConfig: bool | None = None,
+        metaData: dict[str, str | None] | None = None,
+        method: Callable[..., Any] | None = None,
+        dependencies: list[Data | Any] | None = None,
+    ) -> None:
+        if metaData is None:
+            metaData = {}
         (dirName, baseName) = splitPath(path)
         (fileName, extension) = splitExt(baseName)
-        self.path = path
-        self.tmObj = tmObj
-        self.dirName = dirName
-        self.fileName = fileName
-        self.extension = extension
-        self.edgeValues = edgeValues
-        self.isEdge = isEdge
-        self.isConfig = isConfig
-        self.metaData = metaData
-        self.method = method
-        self.dependencies = dependencies
-        self.data = data
-        self.dataLoaded = False
-        self.dataError = False
-        self.dataType = "str"
+        self.path: str = path
+        self.tmObj: Timestamp = tmObj
+        self.dirName: str = dirName
+        self.fileName: str = fileName
+        self.extension: str = extension
+        self.edgeValues: bool = edgeValues
+        self.isEdge: bool | None = isEdge
+        self.isConfig: bool | None = isConfig
+        self.metaData: dict[str, str | None] = metaData
+        self.method: Callable[..., Any] | None = method
+        self.dependencies: list[Data | Any] | None = dependencies
+        self.data: dict[int, Any] | tuple[Any, ...] | None = data
+        self.dataLoaded: float | bool = False
+        self.dataError: bool = False
+        self.dataType: str = "str"
 
-    def load(self, metaOnly=False, silent=SILENT_D, _withGc=False):
+    def load(
+        self,
+        metaOnly: bool = False,
+        silent: str | bool | None = SILENT_D,
+        _withGc: bool = False,
+    ) -> bool:
         """Load a feature from .tf source file.
 
         For faster loading, use TF.load_cfm() which loads from pre-compiled
@@ -151,11 +166,16 @@ class Data:
         indent(level=False)
         return good
 
-    def unload(self):
+    def unload(self) -> None:
         self.data = None
         self.dataLoaded = False
 
-    def save(self, overwrite=False, nodeRanges=False, silent=SILENT_D):
+    def save(
+        self,
+        overwrite: bool = False,
+        nodeRanges: bool = False,
+        silent: str | bool | None = SILENT_D,
+    ) -> bool:
         silent = silentConvert(silent)
         tmObj = self.tmObj
         isSilent = tmObj.isSilent
@@ -167,7 +187,7 @@ class Data:
         setSilent(wasSilent)
         return result
 
-    def _setDataType(self):
+    def _setDataType(self) -> None:
         if self.isConfig:
             return
 
@@ -190,7 +210,7 @@ class Data:
             error(f"{fileName}: Missing @valueType. Should be one of {dataTypesStr}")
             self.dataType = DATA_TYPES[0]
 
-    def _readTf(self, metaOnly=False):
+    def _readTf(self, metaOnly: bool = False) -> bool:
         tmObj = self.tmObj
         error = tmObj.error
         fileName = self.fileName
@@ -240,15 +260,15 @@ class Data:
         fh.close()
         return good
 
-    def _readDataTf(self, fh, firstI):
+    def _readDataTf(self, fh: TextIOWrapper, firstI: int) -> bool:
         tmObj = self.tmObj
         error = tmObj.error
         fileName = self.fileName
 
-        errors = collections.defaultdict(list)
+        errors: dict[str, list[int]] = collections.defaultdict(list)
         i = firstI
         implicit_node = 1
-        data = {}
+        data: dict[int, Any] = {}
         isEdge = self.isEdge
         edgeValues = self.edgeValues
         normFields = 3 if isEdge and edgeValues else 2
@@ -307,7 +327,7 @@ class Data:
                         valTf = ""
             implicit_node = max(nodes) + 1
             if not isEdge or edgeValues:
-                value = (
+                value: str | int | None = (
                     int(valTf)
                     if isNum and valTf != ""
                     else None
@@ -346,7 +366,7 @@ class Data:
         if not errors:
             if self.fileName == OTYPE:
                 slotType = data[1]
-                otype = []
+                otype: list[str] = []
                 maxSlot = 1
                 for n in sorted(data):
                     if data[n] == slotType:
@@ -373,17 +393,17 @@ class Data:
                     # so the min and max values of these keys must differ at least as much
                     # is the number of those keys
                     pass
-                oslots = []
+                oslots: list[array.array[int]] = []
                 for n in nodeList:
                     oslots.append(array.array("I", sorted(data[n])))
                     # oslots.append(tuple(sorted(data[n])))
                 self.data = (tuple(oslots), maxSlot, maxNode)
             elif isEdge:
-                seen = {}
-                datax = {}
+                seen: dict[Any, Any] = {}
+                datax: dict[int, Any] = {}
                 if edgeValues:
                     for n, ms in data.items():
-                        msx = {}
+                        msx: dict[int, Any] = {}
                         for m, v in ms.items():
                             if v not in seen:
                                 seen[v] = v
@@ -391,10 +411,10 @@ class Data:
                         datax[n] = msx
                 else:
                     for n, ms in data.items():
-                        msx = frozenset(ms)
-                        if msx not in seen:
-                            seen[msx] = msx
-                        datax[n] = seen[msx]
+                        msx_frozen = frozenset(ms)
+                        if msx_frozen not in seen:
+                            seen[msx_frozen] = msx_frozen
+                        datax[n] = seen[msx_frozen]
                 self.data = datax
             else:
                 seen = {}
@@ -407,7 +427,7 @@ class Data:
 
         return not errors
 
-    def _compute(self, metaOnly=False):
+    def _compute(self, metaOnly: bool = False) -> bool:
         tmObj = self.tmObj
         isSilent = tmObj.isSilent
         if metaOnly:
@@ -421,10 +441,10 @@ class Data:
         if not good:
             return False
 
-        def info(msg, tm=True):
+        def info(msg: str, tm: bool = True) -> None:
             tmObj.info(cmpFormat.format(msg), tm=tm, cache=-1)
 
-        def error(msg, tm=True):
+        def error(msg: str, tm: bool = True) -> None:
             tmObj.error(cmpFormat.format(msg), tm=tm)
 
         cmpFormat = f"c {self.fileName:<20} {{}}"
@@ -449,13 +469,13 @@ class Data:
 
     def _writeTf(
         self,
-        dirName=None,
-        fileName=None,
-        overwrite=True,
-        extension=None,
-        metaOnly=False,
-        nodeRanges=False,
-    ):
+        dirName: str | None = None,
+        fileName: str | None = None,
+        overwrite: bool = True,
+        extension: str | None = None,
+        metaOnly: bool = False,
+        nodeRanges: bool = False,
+    ) -> bool:
         tmObj = self.tmObj
         indent = tmObj.indent
         info = tmObj.info
@@ -511,7 +531,7 @@ class Data:
             error(msgFormat.format("M" if metaOnly else "T", fileName, dirName))
         return good
 
-    def _writeDataTf(self, fh, nodeRanges=False):
+    def _writeDataTf(self, fh: TextIOWrapper, nodeRanges: bool = False) -> bool:
         tmObj = self.tmObj
         error = tmObj.error
         fileName = self.fileName
@@ -539,7 +559,7 @@ class Data:
             implicitNode = 1
             for n in sorted(data):
                 thisData = data[n]
-                sets = {}
+                sets: dict[Any, set[int]] = {}
                 if edgeValues:
                     for m in thisData:
                         sets.setdefault(thisData[m], set()).add(m)
@@ -612,7 +632,7 @@ class Data:
                         )
         return True
 
-    def _getModified(self):
+    def _getModified(self) -> float | None:
         """Get the modification time of the source file."""
         if self.method:
             depsInfo = [

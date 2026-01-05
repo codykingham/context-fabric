@@ -2,15 +2,22 @@
 # Search result finding
 """
 
+from __future__ import annotations
+
 import types
 from itertools import chain
 from inspect import signature
+from typing import TYPE_CHECKING, Any, Callable, Generator
+
+if TYPE_CHECKING:
+    from cfabric.search.searchexe import SearchExe
+
 from cfabric.search.spin import estimateSpreads
 from cfabric.search.graph import multiEdges
 
 # STITCHING: STRATEGIES ###
 
-STRATEGY = """
+STRATEGY: list[str] = """
     small_choice_multi
     small_choice_first
     by_yarn_size
@@ -19,7 +26,11 @@ STRATEGY = """
 """.strip().split()
 
 
-def setStrategy(searchExe, strategy, keep=False):
+def setStrategy(
+    searchExe: SearchExe,
+    strategy: str | None,
+    keep: bool = False,
+) -> None:
     error = searchExe.api.TF.error
     _msgCache = searchExe._msgCache
     if strategy is None:
@@ -45,7 +56,7 @@ def setStrategy(searchExe, strategy, keep=False):
     searchExe.strategyName = strategy
 
 
-def _spread_1_first(searchExe):
+def _spread_1_first(searchExe: SearchExe) -> None:
     qedges = searchExe.qedges
     qnodes = searchExe.qnodes
 
@@ -156,7 +167,7 @@ def _spread_1_first(searchExe):
     searchExe.removedEdges = set()
 
 
-def _small_choice_first(searchExe):
+def _small_choice_first(searchExe: SearchExe) -> None:
     # This strategy does not try to make a big subgraph of
     # edges with spread 1.
     # The problem is that before the edges work,
@@ -227,7 +238,7 @@ def _small_choice_first(searchExe):
     searchExe.removedEdges = set()
 
 
-def _small_choice_multi(searchExe):
+def _small_choice_multi(searchExe: SearchExe) -> None:
     # This strategy is like small_choice_first
     # but it tries to combine multi-edges as much as possible.
 
@@ -356,7 +367,7 @@ def _small_choice_multi(searchExe):
     searchExe.removedEdges = removedEdges
 
 
-def _by_yarn_size(searchExe):
+def _by_yarn_size(searchExe: SearchExe) -> None:
     # This strategy is like small choice first,
     # but we measure the choices differently,
     # namely by yarn size and spread.
@@ -430,7 +441,7 @@ def _by_yarn_size(searchExe):
     searchExe.removedEdges = set()
 
 
-def _big_choice_first(searchExe):
+def _big_choice_first(searchExe: SearchExe) -> None:
     # For comparison: the opposite of _small_choice_first.
     # Just to see what the performance difference is.
 
@@ -487,7 +498,7 @@ def _big_choice_first(searchExe):
 # STITCHING ###
 
 
-def stitch(searchExe):
+def stitch(searchExe: SearchExe) -> None:
     estimateSpreads(searchExe, both=True)
     _stitchPlan(searchExe)
     if searchExe.good:
@@ -497,7 +508,7 @@ def stitch(searchExe):
 # STITCHING: PLANNING ###
 
 
-def _stitchPlan(searchExe, strategy=None):
+def _stitchPlan(searchExe: SearchExe, strategy: str | None = None) -> None:
     qnodes = searchExe.qnodes
     qedges = searchExe.qedges
     error = searchExe.api.TF.error
@@ -566,7 +577,7 @@ In plan    : {newCedgesO}""",
 # STITCHING: DELIVERING ###
 
 
-def _stitchResults(searchExe):
+def _stitchResults(searchExe: SearchExe) -> None:
     qnodes = searchExe.qnodes
     qedges = searchExe.qedges
     plan = searchExe.stitchPlan

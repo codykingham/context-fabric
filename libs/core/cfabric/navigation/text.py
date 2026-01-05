@@ -355,7 +355,15 @@ features to furnish a decent representation.
     in the file once!)
 """
 
+from __future__ import annotations
+
+from collections.abc import Callable, Iterable
+from typing import TYPE_CHECKING, Any
+
 from cfabric.core.config import OTEXT
+
+if TYPE_CHECKING:
+    from cfabric.core.api import Api
 
 DEFAULT_FORMAT = "text-orig-full"
 DEFAULT_FORMAT_TYPE = "{}-default"
@@ -383,30 +391,30 @@ class Text:
         and `lang='en'` the language of the book name.
     """
 
-    def __init__(self, api):
+    def __init__(self, api: Api) -> None:
         self.api = api
         C = api.C
         Fs = api.Fs
         TF = api.TF
-        self.languages = {}
+        self.languages: dict[str, dict[str, str]] = {}
         """A dictionary of the languages that are available for book names.
         """
 
-        self.nameFromNode = {}
-        self.nodeFromName = {}
+        self.nameFromNode: dict[str, dict[int, str]] = {}
+        self.nodeFromName: dict[str, dict[tuple[str, str], int]] = {}
         config = api.TF.features[OTEXT].metaData if OTEXT in api.TF.features else {}
-        self.sectionTypes = TF.sectionTypes
-        self.sectionTypeSet = set(TF.sectionTypes)
-        self.sectionFeats = TF.sectionFeats
-        self.sectionFeatsWithLanguage = getattr(TF, "sectionFeatsWithLanguage", set())
-        self.sectionFeatures = []
-        self.sectionFeatureTypes = []
-        self.structureTypes = TF.structureTypes
-        self.structureFeats = TF.structureFeats
-        self.structureTypeSet = set(self.structureTypes)
-        self.config = config
-        self.defaultFormat = DEFAULT_FORMAT
-        self.defaultFormats = {}
+        self.sectionTypes: tuple[str, ...] = TF.sectionTypes
+        self.sectionTypeSet: set[str] = set(TF.sectionTypes)
+        self.sectionFeats: tuple[str, ...] = TF.sectionFeats
+        self.sectionFeatsWithLanguage: set[str] = getattr(TF, "sectionFeatsWithLanguage", set())
+        self.sectionFeatures: list[dict[int, str | int]] = []
+        self.sectionFeatureTypes: list[str] = []
+        self.structureTypes: tuple[str, ...] = TF.structureTypes
+        self.structureFeats: tuple[str, ...] = TF.structureFeats
+        self.structureTypeSet: set[str] = set(self.structureTypes)
+        self.config: dict[str, str] = config
+        self.defaultFormat: str = DEFAULT_FORMAT
+        self.defaultFormats: dict[str, str] = {}
 
         structure = getattr(C, "structure", None)
 
@@ -418,7 +426,7 @@ class Text:
             self.hdUp,
             self.hdDown,
         ) = structure.data if structure else (None, None, None, None, None, None)
-        self.headings = (
+        self.headings: tuple[tuple[str, str], ...] = (
             ()
             if structure is None
             else tuple(zip(self.structureTypes, self.structureFeats))
@@ -461,14 +469,19 @@ class Text:
             setattr(self, f"{sec0}Name", self._sec0Name)
             setattr(self, f"{sec0}Node", self._sec0Node)
 
-        self.formats = {}
+        self.formats: dict[str, str | None] = {}
         """The text representation formats that have been defined in your dataset.
         """
 
         self._compileFormats()
         self.good = good
 
-    def sectionTuple(self, n, lastSlot=False, fillup=False):
+    def sectionTuple(
+        self,
+        n: int,
+        lastSlot: bool = False,
+        fillup: bool = False,
+    ) -> tuple[int | str, ...]:
         """Gives a tuple of nodes that correspond to a section.
 
         More precisely, we retrieve the sections that contain a
@@ -562,7 +575,14 @@ class Text:
 
         return (r0, r1, r2)
 
-    def sectionFromNode(self, n, lastSlot=False, lang="en", fillup=False, level=None):
+    def sectionFromNode(
+        self,
+        n: int,
+        lastSlot: bool = False,
+        lang: str = "en",
+        fillup: bool = False,
+        level: int | None = None,
+    ) -> tuple[str | int | None, ...]:
         """Gives the full heading of a section node.
 
         Parameters
@@ -623,7 +643,11 @@ class Text:
 
         return result
 
-    def nodeFromSection(self, section, lang="en"):
+    def nodeFromSection(
+        self,
+        section: tuple[str | int, ...],
+        lang: str = "en",
+    ) -> int | None:
         """Given a section tuple, return the node of it.
 
         Parameters
@@ -662,7 +686,7 @@ class Text:
         else:
             return sec2.get(sec0node, {}).get(section[1], {}).get(section[2], None)
 
-    def structureInfo(self):
+    def structureInfo(self) -> None:
         """Gives a summary of how structure has been configured in the dataset.
 
         If there are headings that are the same for multiple structural nodes,
@@ -730,7 +754,7 @@ There are {len(hdFromNd)} structural elements in the dataset.
             if nMultiple > 10:
                 error(f"\tand {nMultiple - 10} headings more")
 
-    def structure(self, node=None):
+    def structure(self, node: int | None = None) -> tuple[Any, ...] | None:
         """Gives the structure of node and everything below it as a tuple.
 
         Parameters
@@ -768,7 +792,7 @@ There are {len(hdFromNd)} structural elements in the dataset.
 
         return (node, tuple(self.structure(node=d) for d in self.down(node)))
 
-    def structurePretty(self, node=None, fullHeading=False):
+    def structurePretty(self, node: int | None = None, fullHeading: bool = False) -> str | None:
         """Gives the structure of node and everything below it as a string.
 
         Parameters
@@ -790,11 +814,11 @@ There are {len(hdFromNd)} structural elements in the dataset.
 
         structure = self.structure(node=node)
         if structure is None:
-            return
+            return None
 
-        material = []
+        material: list[str] = []
 
-        def generate(struct, indent=""):
+        def generate(struct: int | tuple[Any, ...], indent: str = "") -> None:
             if type(struct) is int:
                 sKey = self.headingFromNode(struct)
                 if not fullHeading:
@@ -808,7 +832,7 @@ There are {len(hdFromNd)} structural elements in the dataset.
         generate(structure)
         return "\n".join(material)
 
-    def top(self):
+    def top(self) -> tuple[int, ...] | None:
         """Gives all top-level structural nodes in the dataset.
         These are the nodes that are not embedded in a structural node of the same
         or a higher level.
@@ -824,7 +848,7 @@ There are {len(hdFromNd)} structural elements in the dataset.
             return None
         return hdTop
 
-    def up(self, n):
+    def up(self, n: int) -> int | None:
         """Gives the parent of a structural node.
 
         Parameters
@@ -864,7 +888,7 @@ There are {len(hdFromNd)} structural elements in the dataset.
             return None
         return hdUp.get(n, None)
 
-    def down(self, n):
+    def down(self, n: int) -> tuple[int, ...] | None:
         """Gives the children of a structural node.
 
         Parameters
@@ -903,7 +927,7 @@ There are {len(hdFromNd)} structural elements in the dataset.
             return None
         return hdDown.get(n, ())
 
-    def headingFromNode(self, n):
+    def headingFromNode(self, n: int) -> tuple[tuple[str, str | int], ...] | None:
         """Gives the full heading of a structural node.
 
         Parameters
@@ -946,7 +970,7 @@ There are {len(hdFromNd)} structural elements in the dataset.
             return None
         return hdFromNd.get(n, None)
 
-    def nodeFromHeading(self, head):
+    def nodeFromHeading(self, head: tuple[tuple[str, str | int], ...]) -> int | None:
         """Gives the node corresponding to a heading, provided it exists.
 
         Parameters
@@ -979,7 +1003,15 @@ There are {len(hdFromNd)} structural elements in the dataset.
             error(f"no structure node with heading {head}", tm=False)
         return n
 
-    def text(self, nodes, fmt=None, descend=None, func=None, explain=False, **kwargs):
+    def text(
+        self,
+        nodes: int | Iterable[int],
+        fmt: str | None = None,
+        descend: bool | None = None,
+        func: Callable[[int], str] | None = None,
+        explain: bool = False,
+        **kwargs: Any,
+    ) -> str:
         """Gives the text that corresponds to a bunch of nodes.
 
         The
@@ -1060,11 +1092,11 @@ There are {len(hdFromNd)} structural elements in the dataset.
             error(f'Undefined format "{fmt}"', tm=False)
             return ""
 
-        def rescue(n, **kwargs):
+        def rescue(n: int, **kwargs: Any) -> str:
             return f"{fOtype(n)}{n}"
 
         single = type(nodes) is int
-        material = []
+        material: list[str] = []
         good = True
 
         if single:
@@ -1191,28 +1223,28 @@ EXPLANATION: T.text() called with parameters:
             error('Text format "{DEFAULT_FORMAT}" not defined in otext.tf', tm=False)
         return "".join(material)
 
-    def _sec0Name(self, n, lang="en"):
+    def _sec0Name(self, n: int, lang: str = "en") -> str:
         sec0T = self.sectionTypes[0]
         fOtype = self.api.F.otype.v
         refNode = n if fOtype(n) == sec0T else self.api.L.u(n, sec0T)[0]
         lookup = self.nameFromNode["" if lang not in self.languages else lang]
         return lookup.get(refNode, f"not a {sec0T} node")
 
-    def _sec0Node(self, name, lang="en"):
+    def _sec0Node(self, name: str | int, lang: str = "en") -> int | None:
         sec0T = self.sectionTypes[0]
         return self.nodeFromName["" if lang not in self.languages else lang].get(
             (sec0T, name), None
         )
 
-    def _compileFormats(self):
+    def _compileFormats(self) -> None:
         api = self.api
         TF = api.TF
         cformats = TF.cformats
 
         self.formats = {}
-        self._tformats = {}
-        self._xformats = {}
-        self._xdTypes = {}
+        self._tformats: dict[str, str] = {}
+        self._xformats: dict[str, Callable[[int], str] | None] = {}
+        self._xdTypes: dict[str, str] = {}
         for fmt, (otpl, rtpl, feats) in sorted(cformats.items()):
             defaultType = self.splitDefaultFormat(fmt)
             if defaultType:
@@ -1225,7 +1257,7 @@ EXPLANATION: T.text() called with parameters:
             self.formats[fmt] = descendType
             self._tformats[fmt] = otpl
 
-    def splitFormat(self, tpl):
+    def splitFormat(self, tpl: str) -> tuple[str, str]:
         api = self.api
         F = api.F
         slotType = F.otype.slotType
@@ -1237,7 +1269,7 @@ EXPLANATION: T.text() called with parameters:
             (descendType, tpl) = parts
         return (descendType, tpl)
 
-    def splitDefaultFormat(self, tpl):
+    def splitDefaultFormat(self, tpl: str) -> str | None:
         api = self.api
         F = api.F
         otypes = set(F.otype.all)
@@ -1249,19 +1281,23 @@ EXPLANATION: T.text() called with parameters:
             else None
         )
 
-    def _compileFormat(self, rtpl, feats):
-        replaceFuncs = []
+    def _compileFormat(
+        self,
+        rtpl: str,
+        feats: list[tuple[tuple[str, ...], str]],
+    ) -> Callable[[int], str]:
+        replaceFuncs: list[Callable[[int], str]] = []
         for feat in feats:
             (feat, default) = feat
             replaceFuncs.append(self._makeFunc(feat, default))
 
-        def g(n, **kwargs):
+        def g(n: int, **kwargs: Any) -> str:
             values = tuple(replaceFunc(n) for replaceFunc in replaceFuncs)
             return rtpl.format(*values)
 
         return g
 
-    def _makeFunc(self, feat, default):
+    def _makeFunc(self, feat: tuple[str, ...], default: str) -> Callable[[int], str]:
         api = self.api
         Fs = api.Fs
         if len(feat) == 1:
@@ -1278,7 +1314,7 @@ EXPLANATION: T.text() called with parameters:
             return lambda n: (f1.get(n, f2.get(n, default)))
         else:
 
-            def _getVal(n):
+            def _getVal(n: int) -> str:
                 v = None
                 for ft in feat:
                     fObj = Fs(ft)

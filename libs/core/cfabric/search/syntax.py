@@ -2,24 +2,30 @@
 # Syntax of search templates
 """
 
+from __future__ import annotations
+
 import re
+from typing import TYPE_CHECKING, Any, Callable, Pattern
+
+if TYPE_CHECKING:
+    from cfabric.search.searchexe import SearchExe
 
 # SYNTACTIC ANALYSIS OF SEARCH TEMPLATE ###
 
-QWHERE = "/where/"
-QHAVE = "/have/"
-QWITHOUT = "/without/"
-QWITH = "/with/"
-QOR = "/or/"
-QEND = "/-/"
+QWHERE: str = "/where/"
+QHAVE: str = "/have/"
+QWITHOUT: str = "/without/"
+QWITH: str = "/with/"
+QOR: str = "/or/"
+QEND: str = "/-/"
 
-QINIT = {QWHERE, QWITHOUT, QWITH}
-QCONT = {QHAVE, QOR}
-QTERM = {QEND}
+QINIT: set[str] = {QWHERE, QWITHOUT, QWITH}
+QCONT: set[str] = {QHAVE, QOR}
+QTERM: set[str] = {QEND}
 
-PARENT_REF = ".."
+PARENT_REF: str = ".."
 
-ESCAPES = (
+ESCAPES: tuple[str, ...] = (
     "\\\\",
     "\\ ",
     "\\t",
@@ -27,58 +33,58 @@ ESCAPES = (
     "\\|",
     "\\=",
 )
-VAL_ESCAPES = {
+VAL_ESCAPES: set[str] = {
     "\\|",
     "\\=",
 }
 
-opPat = r"(?:[.#&|\[\]<>:=-]+\S*)"
+opPat: str = r"(?:[.#&|\[\]<>:=-]+\S*)"
 
-atomOpPat = r"(\s*)({op})\s+([^ \t=#<>~*]+)(?:(?:\s*\Z)|(?:\s+(.*)))$".format(op=opPat)
-atomPat = r"(\s*)([^ \t=#<>~*]+)(?:(?:\s*\Z)|(?:\s+(.*)))$"
-compPat = r"^([a-zA-Z0-9-@_]+)([<>])(.*)$"
-identPat = r"^([a-zA-Z0-9-@_]+)([=#])(.+)$"
-indentLinePat = r"^(\s*)(.*)"
-kPat = r"^([^0-9]*)([0-9]+)([^0-9]+)$"
-namePat = r"[A-Za-z0-9_.-]+"
-namesPat = r"^\s*(?:{op}\s+)?([^ \t:=#<>~*]+):"
-nonePat = r"^([a-zA-Z0-9-@_]+)(#?)\s*$"
-truePat = r"^([a-zA-Z0-9-@_]+)[*]\s*$"
-numPat = r"^-?[0-9]+$"
-opLinePat = r"^(\s*)({op})\s*$".format(op=opPat)
-opStripPat = r"^\s*{op}\s+(.*)$".format(op=opPat)
-quPat = f"(?:{QWHERE}|{QHAVE}|{QWITHOUT}|{QWITH}|{QOR}|{QEND})"
-quLinePat = r"^(\s*)({qu})\s*$".format(qu=quPat)
-relPat = r"^(\s*)({nm})\s+({op})\s+({nm})\s*$".format(nm=namePat, op=opPat)
-rePat = r"^([a-zA-Z0-9-@_]+)~(.*)$"
+atomOpPat: str = r"(\s*)({op})\s+([^ \t=#<>~*]+)(?:(?:\s*\Z)|(?:\s+(.*)))$".format(op=opPat)
+atomPat: str = r"(\s*)([^ \t=#<>~*]+)(?:(?:\s*\Z)|(?:\s+(.*)))$"
+compPat: str = r"^([a-zA-Z0-9-@_]+)([<>])(.*)$"
+identPat: str = r"^([a-zA-Z0-9-@_]+)([=#])(.+)$"
+indentLinePat: str = r"^(\s*)(.*)"
+kPat: str = r"^([^0-9]*)([0-9]+)([^0-9]+)$"
+namePat: str = r"[A-Za-z0-9_.-]+"
+namesPat: str = r"^\s*(?:{op}\s+)?([^ \t:=#<>~*]+):"
+nonePat: str = r"^([a-zA-Z0-9-@_]+)(#?)\s*$"
+truePat: str = r"^([a-zA-Z0-9-@_]+)[*]\s*$"
+numPat: str = r"^-?[0-9]+$"
+opLinePat: str = r"^(\s*)({op})\s*$".format(op=opPat)
+opStripPat: str = r"^\s*{op}\s+(.*)$".format(op=opPat)
+quPat: str = f"(?:{QWHERE}|{QHAVE}|{QWITHOUT}|{QWITH}|{QOR}|{QEND})"
+quLinePat: str = r"^(\s*)({qu})\s*$".format(qu=quPat)
+relPat: str = r"^(\s*)({nm})\s+({op})\s+({nm})\s*$".format(nm=namePat, op=opPat)
+rePat: str = r"^([a-zA-Z0-9-@_]+)~(.*)$"
 
-atomOpRe = re.compile(atomOpPat)
-atomRe = re.compile(atomPat)
-compRe = re.compile(compPat)
-identRe = re.compile(identPat)
-indentLineRe = re.compile(indentLinePat)
-kRe = re.compile(kPat)
-nameRe = re.compile(f"^{namePat}$")
-namesRe = re.compile(namesPat)
-numRe = re.compile(numPat)
-noneRe = re.compile(nonePat)
-trueRe = re.compile(truePat)
-opLineRe = re.compile(opLinePat)
-opStripRe = re.compile(opStripPat)
-quLineRe = re.compile(quLinePat)
-relRe = re.compile(relPat)
-reRe = re.compile(rePat)
-whiteRe = re.compile(r"^\s*(%|$)")
+atomOpRe: Pattern[str] = re.compile(atomOpPat)
+atomRe: Pattern[str] = re.compile(atomPat)
+compRe: Pattern[str] = re.compile(compPat)
+identRe: Pattern[str] = re.compile(identPat)
+indentLineRe: Pattern[str] = re.compile(indentLinePat)
+kRe: Pattern[str] = re.compile(kPat)
+nameRe: Pattern[str] = re.compile(f"^{namePat}$")
+namesRe: Pattern[str] = re.compile(namesPat)
+numRe: Pattern[str] = re.compile(numPat)
+noneRe: Pattern[str] = re.compile(nonePat)
+trueRe: Pattern[str] = re.compile(truePat)
+opLineRe: Pattern[str] = re.compile(opLinePat)
+opStripRe: Pattern[str] = re.compile(opStripPat)
+quLineRe: Pattern[str] = re.compile(quLinePat)
+relRe: Pattern[str] = re.compile(relPat)
+reRe: Pattern[str] = re.compile(rePat)
+whiteRe: Pattern[str] = re.compile(r"^\s*(%|$)")
 
-reTp = type(reRe)
+reTp: type = type(reRe)
 
 
-def syntax(searchExe):
+def syntax(searchExe: SearchExe) -> None:
     error = searchExe.api.TF.error
     _msgCache = searchExe._msgCache
     searchExe.good = True
-    searchExe.badSyntax = []
-    searchExe.searchLines = searchExe.searchTemplate.split("\n")
+    searchExe.badSyntax: list[tuple[int | None, str]] = []
+    searchExe.searchLines: list[str] = searchExe.searchTemplate.split("\n")
     offset = searchExe.offset
 
     _tokenize(searchExe)
@@ -92,10 +98,10 @@ def syntax(searchExe):
             error(txt, tm=False, cache=_msgCache)
 
 
-def _tokenize(searchExe):
-    tokens = []
+def _tokenize(searchExe: SearchExe) -> None:
+    tokens: list[dict[str, Any]] = []
 
-    def lastAtomToken():
+    def lastAtomToken() -> dict[str, Any] | None:
         for token in reversed(tokens):
             kind = token["kind"]
             if kind == "feat":
@@ -105,8 +111,8 @@ def _tokenize(searchExe):
             return None
         return None
 
-    def readFeatures(x, i):
-        features = {}
+    def readFeatures(x: str | None, i: int) -> dict[str, Any] | None:
+        features: dict[str, Any] = {}
         featureString = x.replace("\\ ", chr(1)) if x is not None else ""
         featureList = featureString.split()
         good = True
@@ -116,7 +122,7 @@ def _tokenize(searchExe):
         return features if good else None
 
     searchLines = searchExe.searchLines
-    allGood = True
+    allGood: bool = True
 
     # the template may contain nested quantifiers
     # However, we detect only the outer level of quantifiers.
@@ -461,7 +467,7 @@ def _tokenize(searchExe):
         searchExe.good = False
 
 
-def parseLine(line):
+def parseLine(line: str) -> tuple[str, tuple[Any, ...]]:
     for x in [True]:
         escLine = _esc(line)
 
@@ -508,7 +514,13 @@ def parseLine(line):
     return (kind, data)
 
 
-def parseFeatureVals(searchExe, featStr, features, i, asEdge=False):
+def parseFeatureVals(
+    searchExe: SearchExe,
+    featStr: str,
+    features: dict[str, Any],
+    i: int,
+    asEdge: bool = False,
+) -> bool:
     if asEdge:
         if not (
             (featStr[0] == "-" and featStr[-1] == ">")
@@ -573,7 +585,7 @@ def parseFeatureVals(searchExe, featStr, features, i, asEdge=False):
     return good
 
 
-def _genLine(kind, data):
+def _genLine(kind: str, data: tuple[Any, ...]) -> str | None:
     result = None
 
     for x in [True]:
@@ -603,7 +615,7 @@ def _genLine(kind, data):
     return result
 
 
-def cleanParent(atom, parentName):
+def cleanParent(atom: str, parentName: str) -> str | None:
     (kind, data) = parseLine(atom)
     (indent, op, name, otype, features) = data
     if name == "":
@@ -611,7 +623,10 @@ def cleanParent(atom, parentName):
     return _genLine(kind, (indent, None, name, otype, features))
 
 
-def deContext(quantifier, parentName):
+def deContext(
+    quantifier: tuple[str, list[list[str]], int],
+    parentName: str,
+) -> tuple[str, list[str], str, int]:
     (quKind, quTemplates, ln) = quantifier
 
     # choose a name for the parent
@@ -657,19 +672,19 @@ def deContext(quantifier, parentName):
     return newQuantifier
 
 
-def _makeLimit(n, isLower):
+def _makeLimit(n: int, isLower: bool) -> Callable[[Any], bool]:
     if isLower:
         return lambda x: x is not None and x > n
     return lambda x: x is not None and x < n
 
 
-def _esc(x):
+def _esc(x: str) -> str:
     for i, c in enumerate(ESCAPES):
         x = x.replace(c, chr(i))
     return x
 
 
-def _unesc(x, inRe=False):
+def _unesc(x: str, inRe: bool = False) -> str:
     for i, c in enumerate(ESCAPES):
         if inRe and c in VAL_ESCAPES:
             x = x.replace(chr(i), f"\\{c[1]}")

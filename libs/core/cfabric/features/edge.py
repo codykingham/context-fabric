@@ -25,10 +25,17 @@ This module supports two storage backends:
 - CSR mmap-based storage: CSRArray or CSRArrayWithValues
 """
 
+from __future__ import annotations
+
 import collections
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
 
 from cfabric.utils.helpers import makeInverse, makeInverseVal
 from cfabric.storage.csr import CSRArray, CSRArrayWithValues
+
+if TYPE_CHECKING:
+    from cfabric.core.api import Api
 
 
 class EdgeFeatures:
@@ -47,7 +54,14 @@ class EdgeFeature:
     The backend is auto-detected based on the data type passed to __init__.
     """
 
-    def __init__(self, api, metaData, data, doValues, dataInv=None):
+    def __init__(
+        self,
+        api: Api,
+        metaData: dict[str, Any],
+        data: dict[int, set[int] | dict[int, Any]] | CSRArray | CSRArrayWithValues | tuple[Any, Any],
+        doValues: bool,
+        dataInv: CSRArray | CSRArrayWithValues | None = None,
+    ) -> None:
         self.api = api
         self.meta = metaData
         """Metadata of the feature.
@@ -81,20 +95,20 @@ class EdgeFeature:
                 makeInverseVal(self._data) if doValues else makeInverse(self._data)
             )
 
-    def _convert_sentinel_to_none(self, val):
+    def _convert_sentinel_to_none(self, val: Any) -> Any:
         """Convert sentinel value back to None for int edge values."""
         if self._none_sentinel is not None and val == self._none_sentinel:
             return None
         return val
 
-    def _convert_dict_sentinels(self, d):
+    def _convert_dict_sentinels(self, d: dict[int, Any]) -> dict[int, Any]:
         """Convert all sentinel values in a dict to None."""
         if self._none_sentinel is None:
             return d
         return {k: (None if v == self._none_sentinel else v) for k, v in d.items()}
 
     @property
-    def data(self):
+    def data(self) -> dict[int, set[int] | dict[int, Any]]:
         """Get forward edge data.
 
         For legacy backend, returns the dict directly.
@@ -105,7 +119,7 @@ class EdgeFeature:
         return self._data
 
     @property
-    def dataInv(self):
+    def dataInv(self) -> dict[int, set[int] | dict[int, Any]]:
         """Get inverse edge data.
 
         For legacy backend, returns the dict directly.
@@ -115,7 +129,7 @@ class EdgeFeature:
             return self._materialize_inverse()
         return self._dataInv
 
-    def _materialize_forward(self):
+    def _materialize_forward(self) -> dict[int, set[int] | dict[int, Any]]:
         """Convert forward CSR data to dict format."""
         result = {}
         csr = self._data
@@ -132,7 +146,7 @@ class EdgeFeature:
                     result[n] = set(targets.tolist())
         return result
 
-    def _materialize_inverse(self):
+    def _materialize_inverse(self) -> dict[int, set[int] | dict[int, Any]]:
         """Convert inverse CSR data to dict format."""
         result = {}
         csr = self._dataInv
@@ -151,7 +165,7 @@ class EdgeFeature:
                     result[n] = set(sources.tolist())
         return result
 
-    def _has_forward_edges(self, n):
+    def _has_forward_edges(self, n: int) -> bool:
         """Check if node n has any forward edges."""
         if self._is_mmap:
             i = n - 1
@@ -160,7 +174,7 @@ class EdgeFeature:
             return self._data.indptr[i] < self._data.indptr[i + 1]
         return n in self._data
 
-    def _has_inverse_edges(self, n):
+    def _has_inverse_edges(self, n: int) -> bool:
         """Check if node n has any inverse edges."""
         if self._is_mmap:
             if self._dataInv is None:
@@ -171,7 +185,7 @@ class EdgeFeature:
             return self._dataInv.indptr[i] < self._dataInv.indptr[i + 1]
         return n in self._dataInv
 
-    def _get_forward_edges(self, n):
+    def _get_forward_edges(self, n: int) -> set[int] | dict[int, Any] | Any | None:
         """Get raw forward edges for node n.
 
         Returns:
@@ -193,7 +207,7 @@ class EdgeFeature:
                 return self._data[i]
         return self._data.get(n)
 
-    def _get_inverse_edges(self, n):
+    def _get_inverse_edges(self, n: int) -> set[int] | dict[int, Any] | Any | None:
         """Get raw inverse edges for node n.
 
         Returns:
@@ -217,7 +231,7 @@ class EdgeFeature:
                 return self._dataInv[i]
         return self._dataInv.get(n)
 
-    def items(self):
+    def items(self) -> Iterator[tuple[int, set[int] | dict[int, Any]]]:
         """A generator that yields the items of the feature, seen as a mapping.
 
         This gives you a rather efficient way to iterate over
@@ -244,7 +258,7 @@ class EdgeFeature:
         else:
             yield from self._data.items()
 
-    def f(self, n):
+    def f(self, n: int) -> tuple[int, ...] | tuple[tuple[int, Any], ...]:
         """Get outgoing edges *from* a node.
 
         The edges are those pairs of nodes specified in the feature data,
@@ -284,7 +298,7 @@ class EdgeFeature:
             # For legacy backend: edges is set
             return tuple(sorted(edges, key=lambda m: Crank[m - 1]))
 
-    def t(self, n):
+    def t(self, n: int) -> tuple[int, ...] | tuple[tuple[int, Any], ...]:
         """Get incoming edges *to* a node.
 
         The edges are those pairs of nodes specified in the feature data,
@@ -324,7 +338,7 @@ class EdgeFeature:
             # For legacy backend: edges is set
             return tuple(sorted(edges, key=lambda m: Crank[m - 1]))
 
-    def b(self, n):
+    def b(self, n: int) -> tuple[int, ...] | tuple[tuple[int, Any], ...]:
         """Query *both* incoming edges to, and outgoing edges from a node.
 
         The edges are those pairs of nodes specified in the feature data,
@@ -419,7 +433,9 @@ class EdgeFeature:
                     result |= fwd_edges
             return tuple(sorted(result, key=lambda m: Crank[m - 1]))
 
-    def freqList(self, nodeTypesFrom=None, nodeTypesTo=None):
+    def freqList(
+        self, nodeTypesFrom: set[str] | None = None, nodeTypesTo: set[str] | None = None
+    ) -> tuple[tuple[Any, int], ...] | int:
         """Frequency list of the values of this feature.
 
         Inspect the values of this feature and see how often they occur.

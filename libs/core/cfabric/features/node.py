@@ -16,9 +16,16 @@ But you can still iterate over the data of a feature as if it were a
 dictionary: `cfabric.nodefeature.NodeFeature.items`
 """
 
+from __future__ import annotations
+
 import collections
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
 
 from cfabric.storage.string_pool import StringPool, IntFeatureArray
+
+if TYPE_CHECKING:
+    from cfabric.core.api import Api
 
 
 class NodeFeatures:
@@ -34,7 +41,12 @@ class NodeFeature:
     (StringPool for string features, IntFeatureArray for int features).
     """
 
-    def __init__(self, api, metaData, data):
+    def __init__(
+        self,
+        api: Api,
+        metaData: dict[str, str],
+        data: dict[int, str | int] | StringPool | IntFeatureArray,
+    ) -> None:
         self.api = api
         self.meta = metaData
         """Metadata of the feature.
@@ -45,10 +57,10 @@ class NodeFeature:
 
         self._data = data
         self._is_mmap = isinstance(data, (StringPool, IntFeatureArray))
-        self._cached_data = None  # Cache for materialized dict
+        self._cached_data: dict[int, str | int] | None = None  # Cache for materialized dict
 
     @property
-    def data(self):
+    def data(self) -> dict[int, str | int]:
         """Get data as dict (for backward compatibility).
 
         Note: For mmap backends, this materializes the data into memory.
@@ -63,7 +75,7 @@ class NodeFeature:
             return self._materialize()
         return self._data
 
-    def _materialize(self):
+    def _materialize(self) -> dict[int, str | int]:
         """Convert mmap storage to dict (cached).
 
         Returns
@@ -79,7 +91,7 @@ class NodeFeature:
         self._cached_data = dict(self._data.items())
         return self._cached_data
 
-    def items(self):
+    def items(self) -> Iterator[tuple[int, str | int]]:
         """A generator that yields the items of the feature, seen as a mapping.
 
         It does not yield entries for nodes without values,
@@ -95,7 +107,7 @@ class NodeFeature:
         # Both dict and mmap backends (StringPool/IntFeatureArray) have items()
         return self._data.items()
 
-    def v(self, n):
+    def v(self, n: int) -> str | int | None:
         """Get the value of a feature for a node.
 
         Parameters
@@ -115,7 +127,7 @@ class NodeFeature:
             return self._data[n]
         return None
 
-    def s(self, val):
+    def s(self, val: str | int) -> tuple[int, ...]:
         """Query all nodes having a specified feature value.
 
         This is an other way to walk through nodes than using
@@ -152,7 +164,7 @@ class NodeFeature:
                 )
             )
 
-    def freqList(self, nodeTypes=None):
+    def freqList(self, nodeTypes: set[str] | None = None) -> tuple[tuple[str | int, int], ...]:
         """Frequency list of the values of this feature.
 
         Inspect the values of this feature and see how often they occur.

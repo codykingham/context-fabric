@@ -11,11 +11,26 @@ Supports two backends:
 
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterator
+from typing import TYPE_CHECKING
+
 from cfabric.storage.csr import CSRArray
+
+if TYPE_CHECKING:
+    from cfabric.core.api import Api
 
 
 class OslotsFeature:
-    def __init__(self, api, metaData, data, maxSlot=None, maxNode=None):
+    def __init__(
+        self,
+        api: Api,
+        metaData: dict[str, str],
+        data: tuple[tuple[tuple[int, ...], ...], int, int] | CSRArray,
+        maxSlot: int | None = None,
+        maxNode: int | None = None,
+    ) -> None:
         """Initialize OslotsFeature with either legacy or CSR backend.
 
         Parameters
@@ -35,8 +50,8 @@ class OslotsFeature:
             When using CSR backend, the maximum node number.
             Required when data is a CSRArray.
         """
-        self.api = api
-        self.meta = metaData
+        self.api: Api = api
+        self.meta: dict[str, str] = metaData
         """Metadata of the feature.
 
         This is the information found in the lines starting with `@`
@@ -44,7 +59,11 @@ class OslotsFeature:
         """
 
         # Detect backend type based on data format
-        self._is_mmap = isinstance(data, CSRArray)
+        self._is_mmap: bool = isinstance(data, CSRArray)
+
+        self._data: tuple[tuple[int, ...], ...] | CSRArray
+        self.maxSlot: int | None
+        self.maxNode: int | None
 
         if self._is_mmap:
             # CSR backend
@@ -53,12 +72,13 @@ class OslotsFeature:
             self.maxNode = maxNode
         else:
             # Legacy tuple format
+            assert isinstance(data, tuple)
             self._data = data[0]
             self.maxSlot = data[1]
             self.maxNode = data[2]
 
     @property
-    def data(self):
+    def data(self) -> tuple[tuple[int, ...], ...] | CSRArray:
         """Legacy access to raw slots data.
 
         For legacy backend, returns the slots tuple.
@@ -66,16 +86,21 @@ class OslotsFeature:
         """
         return self._data
 
-    def items(self):
+    def items(self) -> Iterator[tuple[int, tuple[int, ...]]]:
         """A generator that yields the non-slot nodes with their slots."""
 
         maxSlot = self.maxSlot
         maxNode = self.maxNode
+
+        assert maxSlot is not None
+        assert maxNode is not None
+
         shift = maxSlot + 1
 
         if self._is_mmap:
             # CSR backend: use get_as_tuple for API compatibility
             data = self._data
+            assert isinstance(data, CSRArray)
             for n in range(maxSlot + 1, maxNode + 1):
                 yield (n, data.get_as_tuple(n - shift))
         else:
@@ -84,7 +109,7 @@ class OslotsFeature:
             for n in range(maxSlot + 1, maxNode + 1):
                 yield (n, data[n - shift])
 
-    def s(self, n):
+    def s(self, n: int) -> tuple[int, ...]:
         """Get the slots of a (non-slot) node.
 
         Parameters
@@ -105,11 +130,14 @@ class OslotsFeature:
 
         if n == 0:
             return ()
-        if n < self.maxSlot + 1:
+        if self.maxSlot is not None and n < self.maxSlot + 1:
             return (n,)
+        if self.maxSlot is None:
+            return ()
         m = n - self.maxSlot
         if m <= len(self._data):
             if self._is_mmap:
+                assert isinstance(self._data, CSRArray)
                 return self._data.get_as_tuple(m - 1)
             else:
                 return self._data[m - 1]

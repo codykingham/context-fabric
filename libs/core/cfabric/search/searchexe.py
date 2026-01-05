@@ -2,6 +2,13 @@
 # Search execution management
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Callable, Generator
+
+if TYPE_CHECKING:
+    from cfabric.core.api import Api
+
 from cfabric.search.relations import basicRelations
 from cfabric.search.syntax import syntax
 from cfabric.search.semantics import semantics
@@ -12,60 +19,69 @@ from cfabric.core.config import SEARCH_FAIL_FACTOR, YARN_RATIO, TRY_LIMIT_FROM, 
 from cfabric.utils.timestamp import DEEP
 
 
-PROGRESS = 100
+PROGRESS: int = 100
 
 
 class SearchExe:
-    perfDefaults = dict(
+    perfDefaults: dict[str, int | float] = dict(
         yarnRatio=YARN_RATIO,
         tryLimitFrom=TRY_LIMIT_FROM,
         tryLimitTo=TRY_LIMIT_TO,
     )
-    perfParams = dict(**perfDefaults)
+    perfParams: dict[str, int | float] = dict(**perfDefaults)
 
     @classmethod
-    def setPerfParams(cls, params):
+    def setPerfParams(cls, params: dict[str, int | float]) -> None:
         cls.perfParams = params
 
     def __init__(
         self,
-        api,
-        searchTemplate,
-        outerTemplate=None,
-        quKind=None,
-        offset=0,
-        level=0,
-        sets=None,
-        shallow=False,
-        silent=DEEP,
-        showQuantifiers=False,
-        _msgCache=False,
-        setInfo={},
-    ):
-        self.api = api
+        api: Api,
+        searchTemplate: str,
+        outerTemplate: str | None = None,
+        quKind: str | None = None,
+        offset: int = 0,
+        level: int = 0,
+        sets: dict[str, set[int]] | None = None,
+        shallow: bool | int = False,
+        silent: str = DEEP,
+        showQuantifiers: bool = False,
+        _msgCache: bool | list[Any] = False,
+        setInfo: dict[str, bool | None] | None = None,
+    ) -> None:
+        if setInfo is None:
+            setInfo = {}
+        self.api: Api = api
         TF = api.TF
         setSilent = TF.setSilent
 
-        self.searchTemplate = searchTemplate
-        self.outerTemplate = outerTemplate
-        self.quKind = quKind
-        self.level = level
-        self.offset = offset
-        self.sets = sets
-        self.shallow = 0 if not shallow else 1 if shallow is True else shallow
-        self.silent = silent
+        self.searchTemplate: str = searchTemplate
+        self.outerTemplate: str | None = outerTemplate
+        self.quKind: str | None = quKind
+        self.level: int = level
+        self.offset: int = offset
+        self.sets: dict[str, set[int]] | None = sets
+        self.shallow: int = 0 if not shallow else 1 if shallow is True else shallow
+        self.silent: str = silent
         setSilent(silent)
-        self.showQuantifiers = showQuantifiers
-        self._msgCache = (
+        self.showQuantifiers: bool = showQuantifiers
+        self._msgCache: list[Any] | int = (
             _msgCache if type(_msgCache) is list else -1 if _msgCache else 0
         )
-        self.good = True
-        self.setInfo = setInfo
+        self.good: bool = True
+        self.setInfo: dict[str, bool | None] = setInfo
         basicRelations(self, api)
 
     # API METHODS ###
 
-    def search(self, limit=None):
+    def search(
+        self, limit: int | None = None
+    ) -> (
+        tuple[tuple[int, ...], ...] |
+        set[int] |
+        set[tuple[int, ...]] |
+        Generator[tuple[int, ...], None, None]
+    ):
         api = self.api
         TF = api.TF
         setSilent = TF.setSilent
@@ -74,7 +90,7 @@ class SearchExe:
         setSilent(self.silent)
         return self.fetch(limit=limit)
 
-    def study(self, strategy=None):
+    def study(self, strategy: str | None = None) -> None:
         api = self.api
         TF = api.TF
         info = TF.info
@@ -124,7 +140,14 @@ class SearchExe:
             info("Iterate over S.fetch() to get the results", tm=False, cache=_msgCache)
             info("See S.showPlan() to interpret the results", tm=False, cache=_msgCache)
 
-    def fetch(self, limit=None):
+    def fetch(
+        self, limit: int | None = None
+    ) -> (
+        tuple[tuple[int, ...], ...] |
+        set[int] |
+        set[tuple[int, ...]] |
+        Generator[tuple[int, ...], None, None]
+    ):
         api = self.api
         TF = api.TF
         F = api.F
@@ -159,7 +182,7 @@ class SearchExe:
 
         return queryResults
 
-    def count(self, progress=None, limit=None):
+    def count(self, progress: int | None = None, limit: int | None = None) -> None:
         TF = self.api.TF
         info = TF.info
         error = TF.error
@@ -216,10 +239,10 @@ class SearchExe:
 
     # SHOWING WITH THE SEARCH GRAPH ###
 
-    def showPlan(self, details=False):
+    def showPlan(self, details: bool = False) -> None:
         displayPlan(self, details=details)
 
-    def showOuterTemplate(self, _msgCache):
+    def showOuterTemplate(self, _msgCache: list[Any] | int) -> None:
         error = self.api.TF.error
         offset = self.offset
         outerTemplate = self.outerTemplate
@@ -231,16 +254,21 @@ class SearchExe:
 
     # TOP-LEVEL IMPLEMENTATION METHODS
 
-    def _parse(self):
+    def _parse(self) -> None:
         syntax(self)
         semantics(self)
 
-    def _prepare(self):
+    def _prepare(self) -> None:
         if not self.good:
             return
-        self.yarns = {}
-        self.spreads = {}
-        self.spreadsC = {}
-        self.uptodate = {}
-        self.results = None
+        self.yarns: dict[int, set[int]] = {}
+        self.spreads: dict[int, float] = {}
+        self.spreadsC: dict[int, float] = {}
+        self.uptodate: dict[int, bool] = {}
+        self.results: (
+            set[int] |
+            set[tuple[int, ...]] |
+            Callable[[bool], Generator[tuple[int, ...], None, None]] |
+            None
+        ) = None
         connectedness(self)

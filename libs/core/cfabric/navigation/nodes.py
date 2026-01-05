@@ -56,16 +56,23 @@ available when working with an element. That is the advantage of pre-order over
 post-order. It is very much like SAX parsing in the XML world.
 """
 
+from __future__ import annotations
+
 import functools
+from collections.abc import Callable, Generator, Iterable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from cfabric.core.api import Api
 
 
 class Nodes:
-    def __init__(self, api):
+    def __init__(self, api: Api) -> None:
         self.api = api
         C = api.C
         Crank = C.rank.data
 
-        self.otypeRank = {d[0]: i for (i, d) in enumerate(reversed(C.levels.data))}
+        self.otypeRank: dict[str, int] = {d[0]: i for (i, d) in enumerate(reversed(C.levels.data))}
         """Dictionary that provides a ranking of the node types.
 
         The node types are ordered in `C.levels.data`, and if you reverse that list,
@@ -75,7 +82,7 @@ class Nodes:
         and the more comprehensive a type is, the higher its rank.
         """
 
-        self.sortKey = lambda n: Crank[n - 1]
+        self.sortKey: Callable[[int], int] = lambda n: Crank[n - 1]
         """Sort key function for the canonical ordering between nodes.
 
 
@@ -89,7 +96,7 @@ class Nodes:
         cfabric.nodes.Nodes.sortNodes: sorting nodes
         """
 
-        self.sortKeyTuple = lambda tup: tuple(Crank[n - 1] for n in tup)
+        self.sortKeyTuple: Callable[[tuple[int, ...]], tuple[int, ...]] = lambda tup: tuple(Crank[n - 1] for n in tup)
         """Sort key function for the canonical ordering between tuples of nodes.
         It applies `sortKey` to each member of the tuple.
         Handy to sort search results. We can sort them in canonical order like this:
@@ -132,14 +139,14 @@ class Nodes:
 
         self.sortKeyChunkLength = sortKeyChunkLength
 
-    def makeSortKeyChunk(self):
+    def makeSortKeyChunk(self) -> tuple[Callable[[tuple[int, tuple[int, int]]], int], Callable[[tuple[int, tuple[int, int]]], int]]:
         api = self.api
 
         fOtype = api.F.otype
         otypeRank = self.otypeRank
         fOtypev = fOtype.v
 
-        def beforePosition(chunk1, chunk2):
+        def beforePosition(chunk1: tuple[int, tuple[int, int]], chunk2: tuple[int, tuple[int, int]]) -> int:
             (n1, (b1, e1)) = chunk1
             (n2, (b2, e2)) = chunk2
             if b1 < b2:
@@ -167,7 +174,7 @@ class Nodes:
                 else 0
             )
 
-        def beforeLength(chunk1, chunk2):
+        def beforeLength(chunk1: tuple[int, tuple[int, int]], chunk2: tuple[int, tuple[int, int]]) -> int:
             (n1, (b1, e1)) = chunk1
             (n2, (b2, e2)) = chunk2
 
@@ -198,7 +205,7 @@ class Nodes:
             functools.cmp_to_key(beforeLength),
         )
 
-    def sortNodes(self, nodeSet):
+    def sortNodes(self, nodeSet: Iterable[int]) -> list[int]:
         """Delivers a tuple of nodes sorted by the *canonical ordering*.
 
         Parameters
@@ -221,7 +228,7 @@ class Nodes:
         Crank = api.C.rank.data
         return sorted(nodeSet, key=lambda n: Crank[n - 1])
 
-    def walk(self, nodes=None, events=False):
+    def walk(self, nodes: Iterable[int] | None = None, events: bool = False) -> Generator[int | tuple[int, bool | None], None, None]:
         """Generates all nodes in the *canonical order*.
         (`cfabric.nodes`)
 

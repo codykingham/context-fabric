@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+from typing import Any
+
+
 class AttrDict(dict):
     """Turn a dict into an object with attributes.
 
@@ -15,30 +20,30 @@ class AttrDict(dict):
     dict by means of keys, like `xxx["yyy"]` rather then by attribute like `xxx.yyy`.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Create the data structure from incoming data."""
         super(AttrDict, self).__init__(*args, **kwargs)
         self.__dict__ = self
 
-    def __missing__(self, key, *args, **kwargs):
+    def __missing__(self, key: str, *args: Any, **kwargs: Any) -> None:
         """Provide a default when retrieving a non-existent member.
 
         This method is used when using the `.key` notation for accessing members.
         """
         return None
 
-    def __getattr__(self, key, *args, **kwargs):
+    def __getattr__(self, key: str, *args: Any, **kwargs: Any) -> None:
         """Provide a default when retrieving a non-existent member.
 
         This method is used when using the `[key]` notation for accessing members.
         """
         return None
 
-    def deepdict(self):
+    def deepdict(self) -> dict[str, Any]:
         return deepdict(self)
 
 
-def deepdict(info, ordinary=False):
+def deepdict(info: Any, ordinary: bool = False) -> Any:
     """Turns an `AttrDict` into a `dict`, recursively.
 
     Parameters
@@ -88,7 +93,7 @@ def deepdict(info, ordinary=False):
     )
 
 
-def deepAttrDict(info, preferTuples=False):
+def deepAttrDict(info: Any, preferTuples: bool = False) -> Any:
     """Turn a `dict` into an `AttrDict`, recursively.
 
     Parameters
@@ -137,7 +142,7 @@ def deepAttrDict(info, preferTuples=False):
     )
 
 
-def isIterable(value):
+def isIterable(value: Any) -> bool:
     """Whether a value is a non-string iterable.
 
     !!! note

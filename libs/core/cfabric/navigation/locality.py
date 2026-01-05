@@ -2,6 +2,13 @@
 # Local navigation between nodes.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from cfabric.core.api import Api
+
 SET_TYPES = {set, frozenset}
 
 
@@ -44,10 +51,10 @@ class Locality:
         *   `L.d(sentenceNode)` will contain `verseNode`.
     """
 
-    def __init__(self, api):
+    def __init__(self, api: Api) -> None:
         self.api = api
 
-    def i(self, n, otype=None):
+    def i(self, n: int, otype: str | set[str] | frozenset[str] | None = None) -> tuple[int, ...]:
         """Produces an ordered tuple of *intersecting* nodes
 
         Intersecting nodes of a node have slots in common with that node.
@@ -96,14 +103,14 @@ class Locality:
         Eoslots = api.E.oslots
 
         slots = Eoslots.s(n)
-        result = set()
+        result: set[int] = set()
         for slot in slots:
             result |= {m for m in levUp[slot - 1] if fOtype(m) in otype}
             if slotType in otype:
                 result.add(slot)
         return sortNodes(result - {n})
 
-    def u(self, n, otype=None):
+    def u(self, n: int, otype: str | set[str] | frozenset[str] | None = None) -> tuple[int, ...]:
         """Produces an ordered tuple of *upward* nodes.
 
         Upward nodes of a node are embedders of that node.
@@ -149,7 +156,7 @@ class Locality:
                 otype = set(otype)
             return tuple(m for m in levUp[n] if fOtype(m) in otype)
 
-    def d(self, n, otype=None):
+    def d(self, n: int, otype: str | set[str] | frozenset[str] | None = None) -> tuple[int, ...]:
         """Produces an ordered tuple of *downward* nodes.
 
         Downward nodes of a node are embedded nodes in that node.
@@ -213,7 +220,7 @@ class Locality:
                 )
             )
 
-    def p(self, n, otype=None):
+    def p(self, n: int, otype: str | set[str] | frozenset[str] | None = None) -> tuple[int, ...]:
         """Produces an ordered tuple of *previous* nodes.
 
         One node is previous to an other if the last slot of the former just precedes
@@ -261,7 +268,7 @@ class Locality:
                 otype = set(otype)
             return tuple(m for m in result if fOtype(m) in otype)
 
-    def n(self, n, otype=None):
+    def n(self, n: int, otype: str | set[str] | frozenset[str] | None = None) -> tuple[int, ...]:
         """Produces an ordered tuple of *next* nodes.
 
         One node is next to an other if the first slot of the former just follows

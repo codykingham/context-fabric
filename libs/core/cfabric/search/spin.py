@@ -2,9 +2,15 @@
 # Search pre-processing
 """
 
+from __future__ import annotations
+
 import types
 from random import randrange
 from inspect import signature
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from cfabric.search.searchexe import SearchExe
 
 from cfabric.search.syntax import (
     reTp,
@@ -21,7 +27,7 @@ from cfabric.utils.helpers import project
 # SPINNING ###
 
 
-def _spinAtom(searchExe, q):
+def _spinAtom(searchExe: SearchExe, q: int) -> None:
     F = searchExe.api.F
     Fs = searchExe.api.Fs
     maxNode = F.otype.maxNode
@@ -78,7 +84,12 @@ def _spinAtom(searchExe, q):
     searchExe.yarns[q] = yarn
 
 
-def _doQuantifier(searchExe, yarn, atom, quantifier):
+def _doQuantifier(
+    searchExe: SearchExe,
+    yarn: set[int],
+    atom: str,
+    quantifier: tuple[str, list[str], str, int],
+) -> set[int]:
     from .searchexe import SearchExe
 
     (quKind, quTemplates, parentName, ln) = quantifier
@@ -237,13 +248,13 @@ def _doQuantifier(searchExe, yarn, atom, quantifier):
     return resultYarn
 
 
-def spinAtoms(searchExe):
+def spinAtoms(searchExe: SearchExe) -> None:
     qnodes = searchExe.qnodes
     for q in range(len(qnodes)):
         _spinAtom(searchExe, q)
 
 
-def estimateSpreads(searchExe, both=False):
+def estimateSpreads(searchExe: SearchExe, both: bool = False) -> None:
     TRY_LIMIT_F = searchExe.perfParams["tryLimitFrom"]
     TRY_LIMIT_T = searchExe.perfParams["tryLimitTo"]
     qnodes = searchExe.qnodes
@@ -311,7 +322,7 @@ def estimateSpreads(searchExe, both=False):
     searchExe.spreadsC = spreadsC
 
 
-def _chooseEdge(searchExe):
+def _chooseEdge(searchExe: SearchExe) -> int:
     qedges = searchExe.qedges
     yarns = searchExe.yarns
     spreads = searchExe.spreads
@@ -326,7 +337,7 @@ def _chooseEdge(searchExe):
     return firstEdge
 
 
-def _spinEdge(searchExe, e):
+def _spinEdge(searchExe: SearchExe, e: int) -> bool:
     YARN_RATIO = searchExe.perfParams["yarnRatio"]
     qnodes = searchExe.qnodes
     relations = searchExe.relations
@@ -407,7 +418,7 @@ def _spinEdge(searchExe, e):
     return affectedF or affectedT
 
 
-def spinEdges(searchExe):
+def spinEdges(searchExe: SearchExe) -> None:
     qnodes = searchExe.qnodes
     qedges = searchExe.qedges
     yarns = searchExe.yarns

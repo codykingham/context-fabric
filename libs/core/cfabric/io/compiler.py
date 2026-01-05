@@ -6,11 +6,14 @@ files into the Context Fabric memory-mapped (.cfm) format. The cfm format uses
 numpy arrays with memory mapping for efficient multi-process access.
 """
 
+from __future__ import annotations
+
 import json
 import numpy as np
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
 
 from cfabric.core.config import (
     CFM_VERSION,
@@ -30,10 +33,17 @@ from cfabric.utils.timestamp import Timestamp, SILENT_D
 from cfabric.utils.helpers import setFromSpec, valueFromTf, makeInverse, makeInverseVal
 import cfabric.precompute.prepare as prepare
 
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
 
 def _check_sentinel_collision(
-    values, sentinel, feature_name, feature_kind, tmObj
-):
+    values: Iterable[Any],
+    sentinel: int,
+    feature_name: str,
+    feature_kind: str,
+    tmObj: Timestamp,
+) -> bool:
     """Check if data contains the sentinel value and warn if so.
 
     Parameters
@@ -48,6 +58,11 @@ def _check_sentinel_collision(
         'node' or 'edge' (for warning message)
     tmObj : Timestamp
         Timestamp object for logging warnings
+
+    Returns
+    -------
+    bool
+        True if sentinel collision was found, False otherwise
     """
     for v in values:
         if v == sentinel:
@@ -80,9 +95,9 @@ class Compiler:
         Timestamp object for logging messages. If None, a new one is created.
     """
 
-    def __init__(self, source_dir: str, tmObj: Optional[Timestamp] = None):
-        self.source_dir = Path(source_dir)
-        self.tmObj = tmObj or Timestamp()
+    def __init__(self, source_dir: str, tmObj: Timestamp | None = None) -> None:
+        self.source_dir: Path = Path(source_dir)
+        self.tmObj: Timestamp = tmObj or Timestamp()
         self.info = self.tmObj.info
         self.error = self.tmObj.error
         self.warning = self.tmObj.warning
@@ -91,18 +106,25 @@ class Compiler:
         self.max_slot: int = 0
         self.max_node: int = 0
         self.slot_type: str = ""
-        self.node_types: List[str] = []
-        self.type_order: List[str] = []  # Types in level order
+        self.node_types: list[str] = []
+        self.type_order: list[str] = []  # Types in level order
 
         # Parsed feature data
-        self._otype_data: Optional[Tuple] = None
-        self._oslots_data: Optional[Tuple] = None
-        self._otext_meta: Dict = {}
-        self._feature_meta: Dict[str, Dict] = {}
-        self._node_features: Dict[str, Dict] = {}
-        self._edge_features: Dict[str, Tuple[Dict, bool]] = {}  # (data, has_values)
+        self._otype_data: tuple[tuple[str, ...], int, int, str] | None = None
+        self._oslots_data: tuple[tuple[tuple[int, ...], ...], int, int] | None = None
+        self._otext_meta: dict[str, str] = {}
+        self._feature_meta: dict[str, dict[str, str]] = {}
+        self._node_features: dict[str, dict[int, str | int]] = {}
+        self._edge_features: dict[str, tuple[dict[int, Any], bool]] = {}  # (data, has_values)
 
-    def compile(self, output_dir: Optional[str] = None) -> bool:
+        # Computed data (populated by _precompute)
+        self._levels_data: list[tuple[str, float, int, int]] | None = None
+        self._order_data: list[int] | None = None
+        self._rank_data: list[int] | None = None
+        self._levup_data: list[tuple[int, ...]] | None = None
+        self._levdown_data: list[tuple[int, ...]] | None = None
+
+    def compile(self, output_dir: str | Path | None = None) -> bool:
         """
         Compile all .tf files to .cfm format.
 
@@ -169,7 +191,9 @@ class Compiler:
         dirMake(str(output_dir / 'features'))
         dirMake(str(output_dir / 'edges'))
 
-    def _parse_tf_file(self, path: Path) -> Tuple[Dict, Dict, bool, bool, bool]:
+    def _parse_tf_file(
+        self, path: Path
+    ) -> tuple[dict[str, str], dict[int, Any], bool, bool, bool]:
         """
         Parse a .tf file.
 
@@ -178,8 +202,8 @@ class Compiler:
         tuple
             (metadata, data, is_edge, edge_has_values, is_config)
         """
-        metadata = {}
-        data = {}
+        metadata: dict[str, str] = {}
+        data: dict[int, Any] = {}
         is_edge = False
         edge_values = False
         is_config = False
@@ -240,6 +264,10 @@ class Compiler:
             fields = line.split('\t')
             lfields = len(fields)
 
+            nodes: set[int]
+            nodes2: set[int]
+            val_tf: str
+
             if lfields == norm_fields:
                 nodes = setFromSpec(fields[0])
                 if is_edge:
@@ -282,7 +310,7 @@ class Compiler:
             implicit_node = max(nodes) + 1
 
             if not is_edge or edge_values:
-                value = (
+                value: str | int | None = (
                     int(val_tf)
                     if is_num and val_tf != ''
                     else None
@@ -317,7 +345,7 @@ class Compiler:
 
         # Transform to otype format (same as data.py)
         slot_type = data[1]
-        otype_list = []
+        otype_list: list[str] = []
         max_slot = 1
 
         for n in sorted(data):
@@ -334,7 +362,7 @@ class Compiler:
         self.slot_type = slot_type
 
         # Collect unique node types
-        type_set = {slot_type}
+        type_set: set[str] = {slot_type}
         for t in otype_list:
             type_set.add(t)
         self.node_types = sorted(type_set)
@@ -356,7 +384,7 @@ class Compiler:
         max_slot = node_list[0] - 1
         max_node = node_list[-1]
 
-        oslots = []
+        oslots: list[tuple[int, ...]] = []
         for n in node_list:
             oslots.append(tuple(sorted(data[n])))
 
@@ -411,7 +439,7 @@ class Compiler:
 
         # Create uint8 array of type indices for non-slot nodes
         num_nonslot = max_node - max_slot
-        otype_arr = np.zeros(num_nonslot, dtype=TYPE_DTYPE)
+        otype_arr: NDArray[np.uint8] = np.zeros(num_nonslot, dtype=TYPE_DTYPE)
 
         for i, t in enumerate(otype_list):
             otype_arr[i] = type_to_idx[t]
@@ -448,10 +476,10 @@ class Compiler:
         if self._otype_data is None or self._oslots_data is None:
             return False
 
-        def log_info(msg, tm=True):
+        def log_info(msg: str, tm: bool = True) -> None:
             self.info(f"  {msg}")
 
-        def log_error(msg, tm=True):
+        def log_error(msg: str, tm: bool = True) -> None:
             self.error(f"  {msg}")
 
         computed_dir = output_dir / 'computed'
@@ -466,7 +494,7 @@ class Compiler:
         )
 
         # Save levels as JSON
-        levels_json = [
+        levels_json: list[dict[str, Any]] = [
             {'type': t, 'avgSlots': avg, 'minNode': mn, 'maxNode': mx}
             for t, avg, mn, mx in levels_data
         ]
@@ -481,7 +509,7 @@ class Compiler:
             self._oslots_data,
             levels_data
         )
-        order_arr = np.array(order_data, dtype=NODE_DTYPE)
+        order_arr: NDArray[np.uint32] = np.array(order_data, dtype=NODE_DTYPE)
         np.save(str(computed_dir / 'order.npy'), order_arr)
 
         # 3. Compute rank
@@ -491,7 +519,7 @@ class Compiler:
             self._otype_data,
             order_data
         )
-        rank_arr = np.array(rank_data, dtype=NODE_DTYPE)
+        rank_arr: NDArray[np.uint32] = np.array(rank_data, dtype=NODE_DTYPE)
         np.save(str(computed_dir / 'rank.npy'), rank_arr)
 
         # 4. Compute levUp
@@ -563,9 +591,9 @@ class Compiler:
     def _compile_int_feature(
         self,
         feature_name: str,
-        data: Dict[int, int],
+        data: dict[int, int],
         output_dir: Path,
-        metadata: Dict
+        metadata: dict[str, str],
     ) -> None:
         """Compile an integer-valued node feature."""
         # Check for sentinel collision (-1 is used for missing values)
@@ -578,7 +606,7 @@ class Compiler:
         int_arr.save(str(output_dir / f'{feature_name}.npy'))
 
         # Save metadata
-        meta = {
+        meta: dict[str, Any] = {
             'name': feature_name,
             'kind': 'node',
             'value_type': 'int',
@@ -590,16 +618,16 @@ class Compiler:
     def _compile_str_feature(
         self,
         feature_name: str,
-        data: Dict[int, str],
+        data: dict[int, str],
         output_dir: Path,
-        metadata: Dict
+        metadata: dict[str, str],
     ) -> None:
         """Compile a string-valued node feature."""
         str_pool = StringPool.from_dict(data, self.max_node)
         str_pool.save(str(output_dir / feature_name))
 
         # Save metadata
-        meta = {
+        meta: dict[str, Any] = {
             'name': feature_name,
             'kind': 'node',
             'value_type': 'str',
@@ -633,14 +661,14 @@ class Compiler:
     def _compile_edge_no_values(
         self,
         feature_name: str,
-        data: Dict[int, set],
+        data: dict[int, set[int]],
         output_dir: Path,
-        metadata: Dict
+        metadata: dict[str, str],
     ) -> None:
         """Compile an edge feature without values."""
         # Convert to CSR format
         # Create sequences for each node (sorted by target)
-        sequences = []
+        sequences: list[list[int]] = []
         for n in range(1, self.max_node + 1):
             if n in data:
                 sequences.append(sorted(data[n]))
@@ -652,7 +680,7 @@ class Compiler:
 
         # Compute and save inverse edges
         inverse = makeInverse(data)
-        inv_sequences = []
+        inv_sequences: list[list[int]] = []
         for n in range(1, self.max_node + 1):
             if n in inverse:
                 inv_sequences.append(sorted(inverse[n]))
@@ -663,7 +691,7 @@ class Compiler:
         inv_csr.save(str(output_dir / f'{feature_name}_inv'))
 
         # Save metadata
-        meta = {
+        meta: dict[str, Any] = {
             'name': feature_name,
             'kind': 'edge',
             'has_values': False,
@@ -675,9 +703,9 @@ class Compiler:
     def _compile_edge_with_values(
         self,
         feature_name: str,
-        data: Dict[int, Dict[int, Any]],
+        data: dict[int, dict[int, Any]],
         output_dir: Path,
-        metadata: Dict
+        metadata: dict[str, str],
     ) -> None:
         """Compile an edge feature with values."""
         value_type = metadata.get('valueType', 'str')
@@ -687,6 +715,8 @@ class Compiler:
         # TF allows edges with @edgeValues where some edges have no explicit
         # value - these parse as None. We use a sentinel to preserve the
         # distinction between None and actual values (like 0).
+        value_dtype: str
+        none_sentinel: int | None
         if is_int:
             value_dtype = 'int32'
             # INT32_MIN as sentinel - extremely unlikely to be a real value
@@ -704,7 +734,7 @@ class Compiler:
 
         # Convert to CSRArrayWithValues format
         # First, convert data to 0-indexed format expected by CSRArrayWithValues
-        data_0indexed = {}
+        data_0indexed: dict[int, dict[int, Any]] = {}
         for n in range(1, self.max_node + 1):
             if n in data:
                 row = data[n]
@@ -721,7 +751,7 @@ class Compiler:
 
         # Compute and save inverse edges
         inverse = makeInverseVal(data)
-        inv_data_0indexed = {}
+        inv_data_0indexed: dict[int, dict[int, Any]] = {}
         for n in range(1, self.max_node + 1):
             if n in inverse:
                 row = inverse[n]
@@ -737,7 +767,7 @@ class Compiler:
         inv_csr.save(str(output_dir / f'{feature_name}_inv'))
 
         # Save metadata - include sentinel so loader can restore None values
-        meta = {
+        meta: dict[str, Any] = {
             'name': feature_name,
             'kind': 'edge',
             'has_values': True,
@@ -755,7 +785,7 @@ class Compiler:
         node_features = list(self._node_features.keys())
         edge_features = list(self._edge_features.keys())
 
-        meta = {
+        meta: dict[str, Any] = {
             'cfm_version': CFM_VERSION,
             'source': str(self.source_dir.name),
             'max_slot': self.max_slot,
@@ -778,7 +808,7 @@ class Compiler:
             json.dump(meta, f, indent=1, ensure_ascii=False)
 
 
-def compile_corpus(source_dir: str, output_dir: Optional[str] = None) -> bool:
+def compile_corpus(source_dir: str, output_dir: str | None = None) -> bool:
     """
     Convenience function to compile a TF corpus to CFM format.
 

@@ -2,18 +2,24 @@
 # Graph oriented functions needed for search
 """
 
+from __future__ import annotations
+
 from itertools import chain
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from cfabric.search.searchexe import SearchExe
 
 # INSPECTING WITH THE SEARCH GRAPH ###
 
 
-HALFBOUNDED = {
+HALFBOUNDED: dict[str, int] = {
     "<": 1,
     ">": -1,
     "<<": 1,
     ">>": -1,
 }
-BOUNDED = {
+BOUNDED: set[str] = {
     "=",
     "==",
     "&&",
@@ -32,7 +38,7 @@ BOUNDED = {
 }
 
 
-def connectedness(searchExe):
+def connectedness(searchExe: SearchExe) -> None:
     error = searchExe.api.TF.error
     qnodes = searchExe.qnodes
     qedges = searchExe.qedges
@@ -74,7 +80,7 @@ def connectedness(searchExe):
         searchExe.good = False
 
 
-def multiEdges(searchExe):
+def multiEdges(searchExe: SearchExe) -> None:
     relations = searchExe.relations
     qedges = searchExe.qedges
     _msgCache = searchExe._msgCache
@@ -114,7 +120,7 @@ def multiEdges(searchExe):
     searchExe.medges = medges
 
 
-def displayPlan(searchExe, details=False):
+def displayPlan(searchExe: SearchExe, details: bool = False) -> None:
     if not searchExe.good:
         return
     api = searchExe.api
@@ -177,7 +183,7 @@ def displayPlan(searchExe, details=False):
     setSilent(wasSilent)
 
 
-def displayNode(searchExe, q, pos2=False):
+def displayNode(searchExe: SearchExe, q: int, pos2: bool = False) -> None:
     info = searchExe.api.TF.info
     _msgCache = searchExe._msgCache
     qnodes = searchExe.qnodes
@@ -201,7 +207,12 @@ def displayNode(searchExe, q, pos2=False):
     info(nodeInfo, tm=False, cache=_msgCache)
 
 
-def displayEdge(searchExe, e, dir, nodesSeen):
+def displayEdge(
+    searchExe: SearchExe,
+    e: int,
+    dir: int,
+    nodesSeen: set[int],
+) -> set[int]:
     info = searchExe.api.TF.info
     _msgCache = searchExe._msgCache
     qnodes = searchExe.qnodes

@@ -5,8 +5,11 @@ Error and informational messages can be issued,
 with a time indication.
 """
 
+from __future__ import annotations
+
 import sys
 import time
+from typing import Any
 
 from cfabric.utils.files import unexpanduser as ux
 
@@ -34,7 +37,7 @@ The value is `"terse"`
 """
 
 
-def silentConvert(arg):
+def silentConvert(arg: str | bool | None) -> str | bool:
     if arg is None:
         return SILENT_D
     if arg is False:
@@ -47,7 +50,7 @@ def silentConvert(arg):
 
 
 class Timestamp:
-    def __init__(self, silent=SILENT_D, level=None):
+    def __init__(self, silent: str | bool | None = SILENT_D, level: int | bool | None = None) -> None:
         """Create a controller for timed messages.
 
         You can specify the degree of verbosity and also
@@ -89,15 +92,22 @@ class Timestamp:
         silent = silentConvert(silent)
         indent = self.indent
 
-        self.oneLevelRep = "   |   "
-        self.timestamp = {}
-        self.level = 0
+        self.oneLevelRep: str = "   |   "
+        self.timestamp: dict[int, float] = {}
+        self.level: int = 0
         indent(level=level, reset=True)
-        self.log = []
-        self.verbose = -2  # regulates all messages
-        self.silent = silent  # regulates informational and warning messages only
+        self.log: list[tuple[bool, bool, str]] = []
+        self.verbose: int = -2  # regulates all messages
+        self.silent: str | bool = silent  # regulates informational and warning messages only
 
-    def raw_msg(self, msg, tm=True, nl=True, cache=0, error=False):
+    def raw_msg(
+        self,
+        msg: Any,
+        tm: bool = True,
+        nl: bool = True,
+        cache: int | list[tuple[bool, bool, str]] = 0,
+        error: bool = False
+    ) -> None:
         # cache is a list: append to cache, do not output anything
         # cache = -1: only to cache
         # cache =  1: to cache and to console
@@ -123,12 +133,12 @@ class Timestamp:
                 channel.write("{}{}".format(msgRep, "\n" if nl else ""))
                 channel.flush()
 
-    def reset(self):
+    def reset(self) -> None:
         self.log = []
 
-    def cache(self, _asString=False):
+    def cache(self, _asString: bool = False) -> str | None:
         if _asString:
-            lines = []
+            lines: list[str] = []
             for error, nl, msgRep in self.log:
                 lines.append("{}{}".format(msgRep, "\n" if nl else ""))
             result = "".join(lines)
@@ -141,8 +151,16 @@ class Timestamp:
         self.log = []
         if _asString:
             return result
+        return None
 
-    def debug(self, msg, tm=True, nl=True, cache=0, force=False):
+    def debug(
+        self,
+        msg: Any,
+        tm: bool = True,
+        nl: bool = True,
+        cache: int | list[tuple[bool, bool, str]] = 0,
+        force: bool = False
+    ) -> None:
         """Sends a debug message to the standard output.
 
         Debug messages are normally silenced, in that case
@@ -168,7 +186,14 @@ class Timestamp:
         if force or self.silent in {VERBOSE}:
             self.raw_msg(msg, tm=tm, nl=nl, cache=cache)
 
-    def info(self, msg, tm=True, nl=True, cache=0, force=False):
+    def info(
+        self,
+        msg: Any,
+        tm: bool = True,
+        nl: bool = True,
+        cache: int | list[tuple[bool, bool, str]] = 0,
+        force: bool = False
+    ) -> None:
         """Sends an informational message to the standard output.
 
         Info messages may have been silenced, in that case
@@ -194,7 +219,14 @@ class Timestamp:
         if force or self.silent in {VERBOSE, AUTO}:
             self.raw_msg(msg, tm=tm, nl=nl, cache=cache)
 
-    def warning(self, msg, tm=True, nl=True, cache=0, force=False):
+    def warning(
+        self,
+        msg: Any,
+        tm: bool = True,
+        nl: bool = True,
+        cache: int | list[tuple[bool, bool, str]] = 0,
+        force: bool = False
+    ) -> None:
         """Sends an warning message to the standard output.
 
         Warning messages may have been silenced, in that case
@@ -220,7 +252,14 @@ class Timestamp:
         if force or self.silent in {VERBOSE, AUTO, TERSE}:
             self.raw_msg(msg, tm=tm, nl=nl, cache=cache)
 
-    def error(self, msg, tm=True, nl=True, cache=0, force=True):
+    def error(
+        self,
+        msg: Any,
+        tm: bool = True,
+        nl: bool = True,
+        cache: int | list[tuple[bool, bool, str]] = 0,
+        force: bool = True
+    ) -> None:
         """Sends an warning message to the standard error.
 
         In a Jupyter notebook, the standard error is displayed with
@@ -243,7 +282,12 @@ class Timestamp:
 
         self.raw_msg(msg, tm=tm, nl=nl, cache=cache, error=True)
 
-    def indent(self, level=None, reset=False, _verbose=None):
+    def indent(
+        self,
+        level: int | bool | None = None,
+        reset: bool = False,
+        _verbose: int | None = None
+    ) -> None:
         """Changes the indentation and timing of forthcoming messages.
 
         Messages can be indented. Multiline messages will have the indent
@@ -275,13 +319,13 @@ class Timestamp:
         )
         if self.level < 0:
             self.level = 0
-        self.levelRep = self.oneLevelRep * self.level
+        self.levelRep: str = self.oneLevelRep * self.level
         if reset:
             self.timestamp[self.level] = time.time()
         if _verbose is not None:
             self.verbose = _verbose
 
-    def isSilent(self):
+    def isSilent(self) -> str | bool:
         """The current verbosity.
 
         Returns
@@ -291,7 +335,7 @@ class Timestamp:
         """
         return self.silent
 
-    def setSilent(self, silent):
+    def setSilent(self, silent: str | bool | None) -> None:
         """Set the verbosity.
 
         Parameters
@@ -303,7 +347,7 @@ class Timestamp:
         silent = silentConvert(silent)
         self.silent = silent
 
-    def silentOn(self, deep=False):
+    def silentOn(self, deep: bool = False) -> None:
         """Suppress informational messages.
 
         Parameters
@@ -313,16 +357,16 @@ class Timestamp:
         """
 
         wasSilent = self.silent
-        self.wasSilent = wasSilent if wasSilent in {VERBOSE, AUTO, TERSE} else AUTO
+        self.wasSilent: str | bool = wasSilent if wasSilent in {VERBOSE, AUTO, TERSE} else AUTO
         self.silent = DEEP if deep else TERSE
 
-    def silentOff(self):
+    def silentOff(self) -> None:
         """Enable informational messages."""
 
         wasSilent = getattr(self, "wasSilent", AUTO)
         self.silent = wasSilent
 
-    def _elapsed(self):
+    def _elapsed(self) -> str:
         interval = time.time() - self.timestamp.setdefault(self.level, time.time())
         if interval < 10:
             return f"{interval: 2.2f}s"

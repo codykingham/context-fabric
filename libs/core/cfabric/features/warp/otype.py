@@ -11,11 +11,25 @@ Supports two backends:
 
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
+
+if TYPE_CHECKING:
+    from cfabric.core.api import Api
 
 
 class OtypeFeature:
-    def __init__(self, api, metaData, data, type_list=None):
+    def __init__(
+        self,
+        api: Api,
+        metaData: dict[str, str],
+        data: tuple[tuple[str, ...], int, int, str] | np.ndarray,
+        type_list: list[str] | dict[str, Any] | None = None,
+    ) -> None:
         """Initialize OtypeFeature with either legacy or mmap backend.
 
         Parameters
@@ -32,8 +46,8 @@ class OtypeFeature:
             When using mmap backend, maps type indices to type strings.
             Required when data is a numpy array.
         """
-        self.api = api
-        self.meta = metaData
+        self.api: Api = api
+        self.meta: dict[str, str] = metaData
         """Metadata of the feature.
 
         This is the information found in the lines starting with `@`
@@ -41,12 +55,18 @@ class OtypeFeature:
         """
 
         # Detect backend type based on data format
-        self._is_mmap = isinstance(data, np.ndarray)
+        self._is_mmap: bool = isinstance(data, np.ndarray)
+
+        self.maxSlot: int | None
+        self.maxNode: int | None
+        self.slotType: str | None
+        self._data: tuple[str, ...] | np.ndarray
+        self._type_list: list[str] | None
 
         if self._is_mmap:
             # Mmap backend: data is numpy array of type indices
             self._data = data
-            self._type_list = type_list
+            self._type_list = type_list if isinstance(type_list, list) else None
             # maxSlot, maxNode, and slotType must be provided via type_list metadata
             # or extracted from the API later; for now we expect them in type_list dict
             if isinstance(type_list, dict):
@@ -62,6 +82,7 @@ class OtypeFeature:
                 self.slotType = None
         else:
             # Legacy tuple format
+            assert isinstance(data, tuple)
             self._data = data[0]
             self.maxSlot = data[1]
             """Last slot node in the corpus."""
@@ -74,14 +95,14 @@ class OtypeFeature:
 
             self._type_list = None
 
-        self.all = None
+        self.all: tuple[str, ...] | None = None
         """List of all node types from big to small."""
 
-        self.support = {}
+        self.support: dict[str, tuple[int, int]] = {}
         """Support dict for s() method: type -> (min_node, max_node)."""
 
     @property
-    def data(self):
+    def data(self) -> tuple[str, ...] | np.ndarray:
         """Legacy access to raw type data.
 
         For legacy backend, returns the type tuple.
@@ -89,22 +110,27 @@ class OtypeFeature:
         """
         return self._data
 
-    def items(self):
+    def items(self) -> Iterator[tuple[int, str]]:
         """As in `cfabric.nodefeature.NodeFeature.items`."""
 
         slotType = self.slotType
         maxSlot = self.maxSlot
 
+        assert slotType is not None
+        assert maxSlot is not None
+
         for n in range(1, maxSlot + 1):
             yield (n, slotType)
 
         maxNode = self.maxNode
+        assert maxNode is not None
         shift = maxSlot + 1
 
         if self._is_mmap:
             # Mmap backend: look up type string via index
             type_list = self._type_list
             data = self._data
+            assert type_list is not None
             for n in range(maxSlot + 1, maxNode + 1):
                 yield (n, type_list[data[n - shift]])
         else:
@@ -113,7 +139,7 @@ class OtypeFeature:
             for n in range(maxSlot + 1, maxNode + 1):
                 yield (n, data[n - shift])
 
-    def v(self, n):
+    def v(self, n: int) -> str | None:
         """Get the node type of a node.
 
         Parameters
@@ -130,17 +156,20 @@ class OtypeFeature:
 
         if n == 0:
             return None
-        if n < self.maxSlot + 1:
+        if self.maxSlot is not None and n < self.maxSlot + 1:
             return self.slotType
+        if self.maxSlot is None:
+            return None
         m = n - self.maxSlot
         if m <= len(self._data):
             if self._is_mmap:
+                assert self._type_list is not None
                 return self._type_list[self._data[m - 1]]
             else:
                 return self._data[m - 1]
         return None
 
-    def s(self, val):
+    def s(self, val: str) -> tuple[int, ...]:
         """Query all nodes having a specified node type.
 
         This is an other way to walk through nodes than using
@@ -176,7 +205,7 @@ class OtypeFeature:
         else:
             return ()
 
-    def sInterval(self, val):
+    def sInterval(self, val: str) -> tuple[int, int] | tuple[()]:
         """The interval of nodes having a specified node type.
 
         The nodes are organized in intervals of nodes with the same type.

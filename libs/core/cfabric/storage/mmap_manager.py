@@ -2,10 +2,16 @@
 Memory-mapped array management for Context Fabric.
 """
 
+from __future__ import annotations
+
 import json
-import numpy as np
 from pathlib import Path
-from typing import Dict, Optional, Any
+from typing import TYPE_CHECKING, Any
+
+import numpy as np
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 from cfabric.storage.csr import CSRArray
 from cfabric.storage.string_pool import StringPool
@@ -23,7 +29,7 @@ class MmapManager:
         Path to .cfm/{version}/ directory
     """
 
-    def __init__(self, cfm_path: Path):
+    def __init__(self, cfm_path: Path | str) -> None:
         """
         Initialize manager for a .cfm directory.
 
@@ -33,11 +39,11 @@ class MmapManager:
             Path to .cfm/{version}/ directory
         """
         self.cfm_path = Path(cfm_path)
-        self._arrays: Dict[str, np.ndarray] = {}
-        self._meta: Optional[dict] = None
+        self._arrays: dict[str, NDArray[Any]] = {}
+        self._meta: dict[str, Any] | None = None
 
     @property
-    def meta(self) -> dict:
+    def meta(self) -> dict[str, Any]:
         """Load and cache corpus metadata."""
         if self._meta is None:
             with open(self.cfm_path / 'meta.json') as f:
@@ -57,10 +63,10 @@ class MmapManager:
         return self.meta['slot_type']
 
     @property
-    def node_types(self) -> list:
+    def node_types(self) -> list[str]:
         return self.meta['node_types']
 
-    def get_array(self, *path_parts: str) -> np.ndarray:
+    def get_array(self, *path_parts: str) -> NDArray[Any]:
         """
         Get a memory-mapped array, loading lazily.
 
@@ -68,7 +74,7 @@ class MmapManager:
         ----------
         path_parts : str
             Path components relative to cfm_path
-            e.g., get_array('warp', 'otype') → warp/otype.npy
+            e.g., get_array('warp', 'otype') -> warp/otype.npy
 
         Returns
         -------
@@ -103,7 +109,7 @@ class MmapManager:
         """Check if the .cfm directory exists and has metadata."""
         return (self.cfm_path / 'meta.json').exists()
 
-    def close(self):
+    def close(self) -> None:
         """Release all memory mappings."""
         self._arrays.clear()
         self._meta = None

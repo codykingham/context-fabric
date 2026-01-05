@@ -2,6 +2,13 @@
 # Search (top-level)
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Generator
+
+if TYPE_CHECKING:
+    from cfabric.core.api import Api
+
 from cfabric.utils.helpers import console, wrapMessages
 from cfabric.search.searchexe import SearchExe
 from cfabric.utils.timestamp import SILENT_D, AUTO, silentConvert
@@ -10,16 +17,16 @@ from cfabric.utils.timestamp import SILENT_D, AUTO, silentConvert
 class Search:
     """ """
 
-    def __init__(self, api, silent=SILENT_D):
+    def __init__(self, api: Api, silent: str = SILENT_D) -> None:
         silent = silentConvert(silent)
-        self.api = api
-        self.silent = silent
-        self.exe = None
+        self.api: Api = api
+        self.silent: str = silent
+        self.exe: SearchExe | None = None
         perfDefaults = SearchExe.perfDefaults
-        self.perfParams = {}
+        self.perfParams: dict[str, int | float] = {}
         self.perfParams.update(perfDefaults)
 
-    def tweakPerformance(self, silent=SILENT_D, **kwargs):
+    def tweakPerformance(self, silent: str = SILENT_D, **kwargs: Any) -> None:
         """Tweak parameters that influence the search process.
 
         !!! explanation "Theory"
@@ -160,13 +167,20 @@ class Search:
 
     def search(
         self,
-        searchTemplate,
-        limit=None,
-        sets=None,
-        shallow=False,
-        silent=SILENT_D,
-        here=True,
-        _msgCache=False,
+        searchTemplate: str,
+        limit: int | None = None,
+        sets: dict[str, set[int]] | None = None,
+        shallow: bool | int = False,
+        silent: str = SILENT_D,
+        here: bool = True,
+        _msgCache: bool | list[Any] = False,
+    ) -> (
+        tuple[tuple[int, ...], ...] |
+        set[int] |
+        set[tuple[int, ...]] |
+        Generator[tuple[int, ...], None, None] |
+        tuple[Any, bool, list[str]] |
+        tuple[Any, bool, list[str], SearchExe]
     ):
         """Searches for combinations of nodes that together match a search template.
 
@@ -245,13 +259,13 @@ class Search:
 
     def study(
         self,
-        searchTemplate,
-        strategy=None,
-        sets=None,
-        shallow=False,
-        here=True,
-        silent=SILENT_D,
-    ):
+        searchTemplate: str,
+        strategy: str | None = None,
+        sets: dict[str, set[int]] | None = None,
+        shallow: bool | int = False,
+        here: bool = True,
+        silent: str = SILENT_D,
+    ) -> None:
         """Studies a template to prepare for searching with it.
 
         The search space will be narrowed down and a plan for retrieving the results
@@ -319,7 +333,18 @@ class Search:
             self.exe = exe
         return exe.study(strategy=strategy)
 
-    def fetch(self, limit=None, _msgCache=False):
+    def fetch(
+        self,
+        limit: int | None = None,
+        _msgCache: bool | list[Any] = False,
+    ) -> (
+        tuple[tuple[int, ...], ...] |
+        set[int] |
+        set[tuple[int, ...]] |
+        Generator[tuple[int, ...], None, None] |
+        tuple[Any, str] |
+        None
+    ):
         """Retrieves query results, up to a limit.
 
         Must be called after a previous `tf.search.search.Search.search()` or
@@ -386,7 +411,7 @@ class Search:
                 return (queryResults, messages)
             return queryResults
 
-    def count(self, progress=None, limit=None):
+    def count(self, progress: int | None = None, limit: int | None = None) -> None:
         """Counts the results, with progress messages, optionally up to a limit.
 
         Must be called after a previous `tf.search.search.Search.search()` or
@@ -430,7 +455,7 @@ class Search:
         else:
             exe.count(progress=progress, limit=limit)
 
-    def showPlan(self, details=False):
+    def showPlan(self, details: bool = False) -> None:
         """Show the result of the latest study of a template.
 
         Search results are tuples of nodes and the plan shows which part of the tuple
@@ -456,7 +481,7 @@ class Search:
         else:
             exe.showPlan(details=details)
 
-    def relationsLegend(self):
+    def relationsLegend(self) -> None:
         """Dynamic info about the basic relations that can be used in templates.
 
         It includes the edge features that are available in your dataset.
@@ -472,7 +497,7 @@ class Search:
             exe = SearchExe(self.api, "")
         console(exe.relationLegend)
 
-    def glean(self, tup):
+    def glean(self, tup: tuple[int, ...]) -> str:
         """Renders a single result into something human readable.
 
         A search result is just a tuple of nodes that correspond to your template, as

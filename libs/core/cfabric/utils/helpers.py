@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import sys
 from sys import getsizeof, stderr
@@ -6,10 +8,14 @@ from itertools import chain
 from collections import deque
 from subprocess import run as run_cmd, CalledProcessError
 from datetime import datetime as dt, timezone
+from typing import TYPE_CHECKING, Any, Callable, Generator
 
+if TYPE_CHECKING:
+    from re import Match
 
 from cfabric.core.config import OMAP
 from cfabric.utils.files import readYaml, unexpanduser as ux
+from cfabric.utils.attrs import AttrDict
 
 
 NBSP = "\u00a0"  # non-breaking space
@@ -52,12 +58,12 @@ NUM_ALFA_RE = re.compile(r"^([0-9]*)([^0-9]*)(.*)$")
 QUAD = "    "
 
 
-def utcnow():
+def utcnow() -> dt:
     return dt.now(timezone.utc)
 
 
-def versionSort(x):
-    parts = []
+def versionSort(x: str) -> tuple[tuple[int, str, str], ...]:
+    parts: list[tuple[int, str, str]] = []
 
     for p in x.split("."):
         match = NUM_ALFA_RE.match(p)
@@ -67,7 +73,7 @@ def versionSort(x):
     return tuple(parts)
 
 
-def var(envVar):
+def var(envVar: str) -> str | None:
     """Retrieves the value of an environment variable.
 
     Parameters
@@ -83,7 +89,7 @@ def var(envVar):
     return os.environ.get(envVar, None)
 
 
-def isInt(val):
+def isInt(val: Any) -> bool:
     try:
         val = int(val)
     except Exception:
@@ -91,7 +97,7 @@ def isInt(val):
     return True
 
 
-def mathEsc(val):
+def mathEsc(val: Any) -> str:
     """Escape dollar signs to `<span>$</span>`.
 
     To prevent them from being interpreted as math in a Jupyter notebook
@@ -101,7 +107,7 @@ def mathEsc(val):
     return "" if val is None else (str(val).replace("$", "<span>$</span>"))
 
 
-def mdEsc(val, math=False):
+def mdEsc(val: Any, math: bool = False) -> str:
     """Escape certain markdown characters.
 
     Parameters
@@ -129,7 +135,7 @@ def mdEsc(val, math=False):
     return val if math else val.replace("$", "<span>$</span>")
 
 
-def htmlEsc(val, math=False):
+def htmlEsc(val: Any, math: bool = False) -> str:
     """Escape certain HTML characters by HTML entities.
 
     To prevent them to be interpreted as HTML
@@ -161,7 +167,7 @@ def htmlEsc(val, math=False):
     )
 
 
-def xmlEsc(val):
+def xmlEsc(val: Any) -> str:
     """Escape certain HTML characters by XML entities.
 
     To prevent them to be interpreted as XML
@@ -182,7 +188,7 @@ def xmlEsc(val):
     )
 
 
-def mdhtmlEsc(val, math=False):
+def mdhtmlEsc(val: Any, math: bool = False) -> str:
     """Escape certain Markdown characters by HTML entities or span elements.
 
     To prevent them to be interpreted as Markdown
@@ -221,7 +227,7 @@ def mdhtmlEsc(val, math=False):
     )
 
 
-def tsvEsc(x):
+def tsvEsc(x: Any) -> str:
     """Escapes a double quote for strings to be included in TSV data.
 
     Only `"` and `'` at the beginning of the string are escaped.
@@ -235,7 +241,7 @@ PANDAS_QUOTE = '"'
 PANDAS_ESCAPE = "\u0001"
 
 
-def pandasEsc(x):
+def pandasEsc(x: Any) -> str:
     """Escapes the character that will be used as the `pandas` quote char.
 
     The escaping is realized by prepending a special char the quote char.
@@ -250,14 +256,14 @@ def pandasEsc(x):
     )
 
 
-def camel(name):
+def camel(name: str) -> str:
     if not name:
         return name
     temp = name.replace("_", " ").title().replace(" ", "")
     return temp[0].lower() + temp[1:]
 
 
-def check32():
+def check32() -> tuple[bool, str, str]:
     warn = ""
     msg = ""
     on32 = sys.maxsize < 2**63 - 1
@@ -268,32 +274,32 @@ def check32():
     return (on32, warn, msg)
 
 
-def console(*msg, error=False, newline=True):
-    msg = " ".join(m if type(m) is str else repr(m) for m in msg)
-    msg = "" if not msg else ux(msg)
-    msg = msg[1:] if msg.startswith("\n") else msg
-    msg = msg[0:-1] if msg.endswith("\n") else msg
+def console(*msg: Any, error: bool = False, newline: bool = True) -> None:
+    msg_str = " ".join(m if type(m) is str else repr(m) for m in msg)
+    msg_str = "" if not msg_str else ux(msg_str)
+    msg_str = msg_str[1:] if msg_str.startswith("\n") else msg_str
+    msg_str = msg_str[0:-1] if msg_str.endswith("\n") else msg_str
     target = sys.stderr if error else sys.stdout
     nl = "\n" if newline else ""
-    target.write(f"{msg}{nl}")
+    target.write(f"{msg_str}{nl}")
     target.flush()
 
 
-def cleanName(name):
+def cleanName(name: str) -> str:
     clean = "".join(c if c in VALID else "_" for c in name)
     if clean == "" or not clean[0] in LETTER:
         clean = "x" + clean
     return MQL_KEYWORDS.get(clean, clean)
 
 
-def isClean(name):
+def isClean(name: str | None) -> bool:
     if name is None or len(name) == 0 or name[0] not in LETTER:
         return False
     return all(c in VALID for c in name[1:])
 
 
-def flattenToSet(features):
-    theseFeatures = set()
+def flattenToSet(features: str | list[Any] | tuple[Any, ...]) -> set[str]:
+    theseFeatures: set[str] = set()
     if type(features) is str:
         theseFeatures |= setFromStr(features)
     else:
@@ -306,8 +312,8 @@ def flattenToSet(features):
     return theseFeatures
 
 
-def setFromSpec(spec):
-    covered = set()
+def setFromSpec(spec: str) -> set[int]:
+    covered: set[int] = set()
     for r_str in spec.split(","):
         bounds = r_str.split("-")
         if len(bounds) == 1:
@@ -322,10 +328,10 @@ def setFromSpec(spec):
     return covered
 
 
-def rangesFromSet(nodeSet):
+def rangesFromSet(nodeSet: set[int]) -> Generator[tuple[int, int], None, None]:
     # ranges = []
-    curstart = None
-    curend = None
+    curstart: int | None = None
+    curend: int | None = None
     for n in sorted(nodeSet):
         if curstart is None:
             curstart = n
@@ -343,9 +349,9 @@ def rangesFromSet(nodeSet):
     # return ranges
 
 
-def rangesFromList(nodeList):  # the list must be sorted
-    curstart = None
-    curend = None
+def rangesFromList(nodeList: list[int]) -> Generator[tuple[int, int], None, None]:  # the list must be sorted
+    curstart: int | None = None
+    curend: int | None = None
     for n in nodeList:
         if curstart is None:
             curstart = n
@@ -360,23 +366,23 @@ def rangesFromList(nodeList):  # the list must be sorted
         yield (curstart, curend)
 
 
-def specFromRanges(ranges):  # ranges must be normalized
+def specFromRanges(ranges: list[tuple[int, int]] | Generator[tuple[int, int], None, None]) -> str:  # ranges must be normalized
     return ",".join(
         "{}".format(r[0]) if r[0] == r[1] else "{}-{}".format(*r) for r in ranges
     )
 
 
-def specFromRangesLogical(ranges):  # ranges must be normalized
+def specFromRangesLogical(ranges: list[tuple[int, int]] | Generator[tuple[int, int], None, None]) -> list[int | list[int]]:  # ranges must be normalized
     return [r[0] if r[0] == r[1] else [r[0], r[1]] for r in ranges]
 
 
-def valueFromTf(tf):
+def valueFromTf(tf: str) -> str:
     return "\\".join(
         x.replace("\\t", "\t").replace("\\n", "\n") for x in tf.split("\\\\")
     )
 
 
-def tfFromValue(val):
+def tfFromValue(val: str | int) -> str | None:
     valTp = type(val)
     isInt = valTp is int
     isStr = valTp is str
@@ -390,46 +396,47 @@ def tfFromValue(val):
     )
 
 
-def makeIndex(data):
-    inv = {}
+def makeIndex(data: dict[int, int]) -> dict[int, set[int]]:
+    inv: dict[int, set[int]] = {}
     for n, m in data.items():
         inv.setdefault(m, set()).add(n)
     return inv
 
 
-def makeInverse(data):
-    inverse = {}
+def makeInverse(data: dict[int, list[int] | set[int]]) -> dict[int, set[int]]:
+    inverse: dict[int, set[int]] = {}
     for n in data:
         for m in data[n]:
             inverse.setdefault(m, set()).add(n)
     return inverse
 
 
-def makeInverseVal(data):
-    inverse = {}
+def makeInverseVal(data: dict[int, dict[int, Any]]) -> dict[int, dict[int, Any]]:
+    inverse: dict[int, dict[int, Any]] = {}
     for n in data:
         for m, val in data[n].items():
             inverse.setdefault(m, {})[n] = val
     return inverse
 
 
-def nbytes(by):
+def nbytes(by: int | float) -> str:
     units = ["B", "KB", "MB", "GB", "TB"]
     for i in range(len(units)):
         if by < 1024 or i == len(units) - 1:
             fmt = "{:>5}{}" if i == 0 else "{:>5.1f}{}"
             return fmt.format(by, units[i])
         by /= 1024
+    return ""
 
 
-def collectFormats(config):
-    featureSet = set()
+def collectFormats(config: dict[str, str]) -> tuple[dict[str, tuple[str, str, tuple[tuple[tuple[str, ...], str], ...]]], list[str]]:
+    featureSet: set[str] = set()
 
-    def collectFormat(tpl):
-        features = []
+    def collectFormat(tpl: str) -> tuple[str, str, tuple[tuple[tuple[str, ...], str], ...]]:
+        features: list[tuple[tuple[str, ...], str]] = []
         default = ""
 
-        def varReplace(match):
+        def varReplace(match: Match[str]) -> str:
             nonlocal default
             varText = match.group(1)
             default = (match.group(2) or ":")[1:]
@@ -442,14 +449,14 @@ def collectFormats(config):
         rtpl = VAR_RE.sub(varReplace, tpl)
         return (tpl, rtpl, tuple(features))
 
-    formats = {}
+    formats: dict[str, tuple[str, str, tuple[tuple[tuple[str, ...], str], ...]]] = {}
     for fmt, tpl in sorted(config.items()):
         if fmt.startswith("fmt:"):
             formats[fmt[4:]] = collectFormat(tpl)
     return (formats, sorted(featureSet))
 
 
-def itemize(string, sep=None):
+def itemize(string: str | None, sep: str | None = None) -> list[str]:
     if not string:
         return []
     if not sep:
@@ -457,7 +464,7 @@ def itemize(string, sep=None):
     return string.strip().split(sep)
 
 
-def fitemize(value):
+def fitemize(value: Any) -> list[str]:
     if not value:
         return []
     if type(value) is str:
@@ -467,16 +474,16 @@ def fitemize(value):
     return list(str(v) for v in value)
 
 
-def project(iterableOfTuples, maxDimension):
+def project(iterableOfTuples: set[tuple[Any, ...]] | list[tuple[Any, ...]], maxDimension: int) -> set[Any] | set[tuple[Any, ...]]:
     if maxDimension == 1:
         return {r[0] for r in iterableOfTuples}
     return {r[0:maxDimension] for r in iterableOfTuples}
 
 
-def wrapMessages(messages):
+def wrapMessages(messages: str | list[str | tuple[bool, bool, str]]) -> tuple[bool, str]:
     if type(messages) is str:
         messages = messages.split("\n")
-    html = []
+    html: list[str] = []
     status = True
     for msg in messages:
         if type(msg) is tuple:
@@ -484,19 +491,19 @@ def wrapMessages(messages):
             if error:
                 status = False
             match = MSG_LINE_RE.match(msgRep)
-            msg = msgRep + ("<br>" if nl else "")
+            msg_str = msgRep + ("<br>" if nl else "")
             clsName = "eline" if error and not match else "tline"
         else:
             match = MSG_LINE_RE.match(msg)
             clsName = "tline" if match else "eline"
             if clsName == "eline":
                 status = False
-            msg = msg.replace("\n", "<br>")
-        html.append(f'<span class="{clsName.lower()}">{msg}</span>')
+            msg_str = msg.replace("\n", "<br>")
+        html.append(f'<span class="{clsName.lower()}">{msg_str}</span>')
     return (status, "".join(html))
 
 
-def makeExamples(nodeList):
+def makeExamples(nodeList: list[int] | tuple[int, ...]) -> str:
     lN = len(nodeList)
     if lN <= 10:
         return f"{lN:>7} x: " + (", ".join(str(n) for n in nodeList))
@@ -509,7 +516,7 @@ def makeExamples(nodeList):
         )
 
 
-def setFromValue(x, asInt=False):
+def setFromValue(x: Any, asInt: bool = False) -> set[Any]:
     if x is None:
         return set()
 
@@ -524,14 +531,14 @@ def setFromValue(x, asInt=False):
     return {x}
 
 
-def setFromStr(x):
+def setFromStr(x: str | None) -> set[str]:
     if x is None:
         return set()
 
     return {p for p in SEP_RE.split(x) if p}
 
 
-def mergeDictOfSets(d1, d2):
+def mergeDictOfSets(d1: dict[Any, set[Any]], d2: dict[Any, set[Any]]) -> None:
     for n, ms in d2.items():
         if n in d1:
             d1[n] |= ms
@@ -539,7 +546,7 @@ def mergeDictOfSets(d1, d2):
             d1[n] = ms
 
 
-def mergeDict(source, overrides):
+def mergeDict(source: dict[str, Any], overrides: dict[str, Any]) -> None:
     """Merge overrides into a source dictionary recursively.
 
     Parameters
@@ -557,7 +564,7 @@ def mergeDict(source, overrides):
             source[k] = v
 
 
-def getAllRealFeatures(api):
+def getAllRealFeatures(api: Any) -> set[str]:
     """Get all configuration features and all loaded node and edge features.
 
     Except `omap@v-w` features.
@@ -569,7 +576,7 @@ def getAllRealFeatures(api):
     """
 
     TF = api.TF
-    allFeatures = set()
+    allFeatures: set[str] = set()
 
     for feat, fObj in TF.features.items():
         if fObj.method:
@@ -582,7 +589,7 @@ def getAllRealFeatures(api):
     return allFeatures
 
 
-def formatMeta(featureMeta):
+def formatMeta(featureMeta: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
     """Reorder meta data.
 
     Parameters
@@ -599,9 +606,9 @@ def formatMeta(featureMeta):
         and the keys `desc` and `eg` deleted.
     """
 
-    result = {}
+    result: dict[str, dict[str, str]] = {}
     for f, meta in featureMeta.items():
-        fmeta = {}
+        fmeta: dict[str, str] = {}
         for k, v in meta.items():
             if k == "eg" and "desc" in meta:
                 continue
@@ -616,7 +623,7 @@ def formatMeta(featureMeta):
     return result
 
 
-def deepSize(o, handlers={}, verbose=False, seen=None):
+def deepSize(o: Any, handlers: dict[type, Callable[[Any], Any]] = {}, verbose: bool = False, seen: set[int] | None = None) -> int:
     """Returns the approximate memory footprint an object and all of its contents.
 
     Automatically finds the contents of the following builtin containers and
@@ -631,10 +638,10 @@ def deepSize(o, handlers={}, verbose=False, seen=None):
 
     """
 
-    def dict_handler(d):
+    def dict_handler(d: dict[Any, Any]) -> chain[Any]:
         return chain.from_iterable(d.items())
 
-    all_handlers = {
+    all_handlers: dict[type, Callable[[Any], Any]] = {
         tuple: iter,
         list: iter,
         deque: iter,
@@ -647,7 +654,7 @@ def deepSize(o, handlers={}, verbose=False, seen=None):
         seen = set()  # track which object id's have already been seen
     default_size = getsizeof(0)  # estimate sizeof object without __sizeof__
 
-    def sizeof(o):
+    def sizeof(o: Any) -> int:
         if id(o) in seen:  # do not double count the same object
             return 0
         seen.add(id(o))
@@ -665,7 +672,7 @@ def deepSize(o, handlers={}, verbose=False, seen=None):
     return sizeof(o)
 
 
-def run(cmdline, workDir=None):
+def run(cmdline: str, workDir: str | None = None) -> tuple[bool, int, str, str]:
     """Runs a shell command and returns all relevant info.
 
     The function runs a command-line in a shell, and returns
@@ -702,7 +709,7 @@ def run(cmdline, workDir=None):
     return (good, returnCode, stdOut, stdErr)
 
 
-def readCfg(folder, file, label, verbose=0, **kwargs):
+def readCfg(folder: str, file: str, label: str, verbose: int = 0, **kwargs: Any) -> tuple[bool, AttrDict | dict[str, Any] | None]:
     settingsFile = f"{folder}/config/{file}.yml"
     settings = readYaml(asFile=settingsFile, **kwargs)
 
