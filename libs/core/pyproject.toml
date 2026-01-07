@@ -50,9 +50,9 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/codykingham/context-fabric"
-Repository = "https://github.com/codykingham/context-fabric"
-Issues = "https://github.com/codykingham/context-fabric/issues"
+Homepage = "https://github.com/Context-Fabric/context-fabric"
+Repository = "https://github.com/Context-Fabric/context-fabric"
+Issues = "https://github.com/Context-Fabric/context-fabric/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

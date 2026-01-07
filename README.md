@@ -11,8 +11,8 @@
 <p align="center">
   <a href="https://pypi.org/project/context-fabric/"><img src="https://img.shields.io/pypi/v/context-fabric?color=blue" alt="PyPI"></a>
   <a href="https://pypi.org/project/context-fabric/"><img src="https://img.shields.io/pypi/pyversions/context-fabric" alt="Python"></a>
-  <a href="https://github.com/codykingham/context-fabric/actions"><img src="https://img.shields.io/github/actions/workflow/status/codykingham/context-fabric/ci.yml?branch=master" alt="CI"></a>
-  <a href="https://github.com/codykingham/context-fabric/blob/master/LICENSE"><img src="https://img.shields.io/github/license/codykingham/context-fabric" alt="License"></a>
+  <a href="https://github.com/Context-Fabric/context-fabric/actions"><img src="https://img.shields.io/github/actions/workflow/status/Context-Fabric/context-fabric/ci.yml?branch=master" alt="CI"></a>
+  <a href="https://github.com/Context-Fabric/context-fabric/blob/master/LICENSE"><img src="https://img.shields.io/github/license/Context-Fabric/context-fabric" alt="License"></a>
 </p>
 
 ---

@@ -105,7 +105,7 @@ URL_GL_UPLOAD = "https://uploads.gitlab.com"
 URL_NB = "https://nbviewer.jupyter.org"
 """Base URL of NB-viewer."""
 
-URL_CF_DOCS = "https://github.com/codykingham/context-fabric"
+URL_CF_DOCS = "https://github.com/Context-Fabric/context-fabric"
 
 PROTOCOL = "http://"
 HOST = "localhost"
