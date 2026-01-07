@@ -23,6 +23,7 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 from cfabric.storage.string_pool import StringPool, IntFeatureArray
+from cfabric.utils.helpers import safe_rank_key
 
 if TYPE_CHECKING:
     from cfabric.core.api import Api
@@ -146,7 +147,7 @@ class NodeFeature:
             (`cfabric.nodes`)
         """
 
-        Crank = self.api.C.rank.data
+        rank_key = safe_rank_key(self.api.C.rank.data)
 
         if self._is_mmap:
             # For mmap, we need to scan all nodes
@@ -155,12 +156,12 @@ class NodeFeature:
             for n in range(1, max_node + 1):
                 if self.v(n) == val:
                     matches.append(n)
-            return tuple(sorted(matches, key=lambda n: Crank[n - 1]))
+            return tuple(sorted(matches, key=rank_key))
         else:
             return tuple(
                 sorted(
                     [n for n in self._data if self._data[n] == val],
-                    key=lambda n: Crank[n - 1],
+                    key=rank_key,
                 )
             )
 

@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from cfabric.utils.helpers import safe_rank_key
+
 if TYPE_CHECKING:
     from cfabric.core.api import Api
 
@@ -195,11 +197,11 @@ class OtypeFeature:
             # Because we cannot assume that nodes of non-slot types are already
             # canonically sorted.
             # That's a pity, because now we need more memory!
-            Crank = self.api.C.rank.data
+            rank_key = safe_rank_key(self.api.C.rank.data)
             return tuple(
                 sorted(
                     range(b, e + 1),
-                    key=lambda n: Crank[n - 1],
+                    key=rank_key,
                 )
             )
         else:

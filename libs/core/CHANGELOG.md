@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-01-06 ([ck])
+
+### Fixed
+- Defensive bounds checking for out-of-bounds node IDs across the codebase:
+  - `StringPool.get()` and `IntFeatureArray.get()` return `None` for invalid nodes
+  - `RankComputed.__getitem__` returns fallback rank for invalid nodes
+  - Added `safe_rank_key()` helper used by node/edge features, search, and navigation
+  - Prevents crashes when corpus metadata references nodes beyond feature array bounds
+  - Useful for corpora created as subsets of larger corpora where edge features may reference nodes outside the subset
+
 ## [0.3.0] - 2026-01-05 ([ck])
 
 ### Added

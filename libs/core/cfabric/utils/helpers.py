@@ -58,6 +58,32 @@ NUM_ALFA_RE = re.compile(r"^([0-9]*)([^0-9]*)(.*)$")
 QUAD = "    "
 
 
+def safe_rank_key(Crank: Any) -> Callable[[int], int]:
+    """Create a sort key function that safely handles out-of-bounds nodes.
+
+    Parameters
+    ----------
+    Crank : array-like
+        The canonical rank array (0-indexed, so node n has rank Crank[n-1])
+
+    Returns
+    -------
+    Callable[[int], int]
+        A function that returns the rank for a node, or a large value for
+        out-of-bounds nodes (so they sort to the end).
+    """
+    max_idx = len(Crank)
+    fallback = max_idx + 1  # Out-of-bounds nodes sort to end
+
+    def get_rank(n: int) -> int:
+        idx = n - 1
+        if idx < 0 or idx >= max_idx:
+            return fallback
+        return Crank[idx]
+
+    return get_rank
+
+
 def utcnow() -> dt:
     return dt.now(timezone.utc)
 

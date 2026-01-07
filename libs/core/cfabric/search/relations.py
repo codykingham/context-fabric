@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from cfabric.search.searchexe import SearchExe
 
 from cfabric.core.config import OTYPE, OSLOTS, OMAP
-from cfabric.utils.helpers import makeIndex
+from cfabric.utils.helpers import makeIndex, safe_rank_key
 from cfabric.utils.logging import DEEP
 from cfabric.search.syntax import reTp
 
@@ -44,15 +44,19 @@ def _l_gt(n: int, m: int) -> bool:
 
 
 def _l_ranklt(Crank: array.array[int]) -> Callable[[int, int], bool]:
+    rank_key = safe_rank_key(Crank)
+
     def func(n: int, m: int) -> bool:
-        return Crank[n - 1] < Crank[m - 1]
+        return rank_key(n) < rank_key(m)
 
     return func
 
 
 def _l_rankgt(Crank: array.array[int]) -> Callable[[int, int], bool]:
+    rank_key = safe_rank_key(Crank)
+
     def func(n: int, m: int) -> bool:
-        return Crank[n - 1] > Crank[m - 1]
+        return rank_key(n) > rank_key(m)
 
     return func
 

@@ -62,6 +62,8 @@ import functools
 from collections.abc import Callable, Generator, Iterable
 from typing import TYPE_CHECKING
 
+from cfabric.utils.helpers import safe_rank_key
+
 if TYPE_CHECKING:
     from cfabric.core.api import Api
 
@@ -71,6 +73,7 @@ class Nodes:
         self.api = api
         C = api.C
         Crank = C.rank.data
+        rank_key = safe_rank_key(Crank)
 
         self.otypeRank: dict[str, int] = {d[0]: i for (i, d) in enumerate(reversed(C.levels.data))}
         """Dictionary that provides a ranking of the node types.
@@ -82,7 +85,7 @@ class Nodes:
         and the more comprehensive a type is, the higher its rank.
         """
 
-        self.sortKey: Callable[[int], int] = lambda n: Crank[n - 1]
+        self.sortKey: Callable[[int], int] = rank_key
         """Sort key function for the canonical ordering between nodes.
 
 
@@ -96,7 +99,7 @@ class Nodes:
         cfabric.nodes.Nodes.sortNodes: sorting nodes
         """
 
-        self.sortKeyTuple: Callable[[tuple[int, ...]], tuple[int, ...]] = lambda tup: tuple(Crank[n - 1] for n in tup)
+        self.sortKeyTuple: Callable[[tuple[int, ...]], tuple[int, ...]] = lambda tup: tuple(rank_key(n) for n in tup)
         """Sort key function for the canonical ordering between tuples of nodes.
         It applies `sortKey` to each member of the tuple.
         Handy to sort search results. We can sort them in canonical order like this:
@@ -225,8 +228,8 @@ class Nodes:
 
         api = self.api
 
-        Crank = api.C.rank.data
-        return sorted(nodeSet, key=lambda n: Crank[n - 1])
+        rank_key = safe_rank_key(api.C.rank.data)
+        return sorted(nodeSet, key=rank_key)
 
     def walk(self, nodes: Iterable[int] | None = None, events: bool = False) -> Generator[int | tuple[int, bool | None], None, None]:
         """Generates all nodes in the *canonical order*.

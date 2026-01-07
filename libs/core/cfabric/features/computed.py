@@ -55,7 +55,11 @@ class RankComputed(Computed):
     """
 
     def __getitem__(self, n: int) -> int:
-        return int(self.data[n - 1])
+        idx = n - 1
+        if idx < 0 or idx >= len(self.data):
+            # Out-of-bounds nodes get a rank beyond the last valid node
+            return len(self.data) + 1
+        return int(self.data[idx])
 
 
 class OrderComputed(Computed):

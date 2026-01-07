@@ -42,6 +42,23 @@ class TestStringPool:
             assert loaded.get(3) == 'world'
 
 
+    def test_out_of_bounds_returns_none(self):
+        """StringPool returns None for out-of-bounds nodes."""
+        data = {1: 'hello', 2: 'world'}
+        pool = StringPool.from_dict(data, max_node=3)
+
+        # Within bounds
+        assert pool.get(1) == 'hello'
+        assert pool.get(2) == 'world'
+        assert pool.get(3) is None  # missing but in bounds
+
+        # Out of bounds - should return None, not crash
+        assert pool.get(0) is None
+        assert pool.get(-1) is None
+        assert pool.get(4) is None
+        assert pool.get(1000000) is None
+
+
 class TestIntFeatureArray:
     """Test IntFeatureArray for integer features."""
 
@@ -54,6 +71,22 @@ class TestIntFeatureArray:
         assert arr.get(2) is None  # missing
         assert arr.get(3) == 30
         assert arr.get(5) == 50
+
+    def test_out_of_bounds_returns_none(self):
+        """IntFeatureArray returns None for out-of-bounds nodes."""
+        data = {1: 10, 2: 20}
+        arr = IntFeatureArray.from_dict(data, max_node=3)
+
+        # Within bounds
+        assert arr.get(1) == 10
+        assert arr.get(2) == 20
+        assert arr.get(3) is None  # missing but in bounds
+
+        # Out of bounds - should return None, not crash
+        assert arr.get(0) is None
+        assert arr.get(-1) is None
+        assert arr.get(4) is None
+        assert arr.get(1000000) is None
 
     def test_save_load_roundtrip(self):
         """IntFeatureArray can be saved and loaded."""

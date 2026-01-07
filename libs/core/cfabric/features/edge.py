@@ -31,7 +31,7 @@ import collections
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
-from cfabric.utils.helpers import makeInverse, makeInverseVal
+from cfabric.utils.helpers import makeInverse, makeInverseVal, safe_rank_key
 from cfabric.storage.csr import CSRArray, CSRArrayWithValues
 
 if TYPE_CHECKING:
@@ -289,14 +289,14 @@ class EdgeFeature:
         if hasattr(edges, '__len__') and len(edges) == 0:
             return ()
 
-        Crank = self.api.C.rank.data
+        rank_key = safe_rank_key(self.api.C.rank.data)
         if self.doValues:
             # edges is a dict for both backends
-            return tuple(sorted(edges.items(), key=lambda mv: Crank[mv[0] - 1]))
+            return tuple(sorted(edges.items(), key=lambda mv: rank_key(mv[0])))
         else:
             # For mmap backend: edges is tuple
             # For legacy backend: edges is set
-            return tuple(sorted(edges, key=lambda m: Crank[m - 1]))
+            return tuple(sorted(edges, key=rank_key))
 
     def t(self, n: int) -> tuple[int, ...] | tuple[tuple[int, Any], ...]:
         """Get incoming edges *to* a node.
@@ -329,14 +329,14 @@ class EdgeFeature:
         if hasattr(edges, '__len__') and len(edges) == 0:
             return ()
 
-        Crank = self.api.C.rank.data
+        rank_key = safe_rank_key(self.api.C.rank.data)
         if self.doValues:
             # edges is a dict for both backends
-            return tuple(sorted(edges.items(), key=lambda mv: Crank[mv[0] - 1]))
+            return tuple(sorted(edges.items(), key=lambda mv: rank_key(mv[0])))
         else:
             # For mmap backend: edges is tuple
             # For legacy backend: edges is set
-            return tuple(sorted(edges, key=lambda m: Crank[m - 1]))
+            return tuple(sorted(edges, key=rank_key))
 
     def b(self, n: int) -> tuple[int, ...] | tuple[tuple[int, Any], ...]:
         """Query *both* incoming edges to, and outgoing edges from a node.
@@ -405,7 +405,7 @@ class EdgeFeature:
         if not has_forward and not has_inverse:
             return ()
 
-        Crank = self.api.C.rank.data
+        rank_key = safe_rank_key(self.api.C.rank.data)
 
         if self.doValues:
             result = {}
@@ -416,7 +416,7 @@ class EdgeFeature:
             fwd_edges = self._get_forward_edges(n)
             if fwd_edges:
                 result.update(fwd_edges.items())
-            return tuple(sorted(result.items(), key=lambda mv: Crank[mv[0] - 1]))
+            return tuple(sorted(result.items(), key=lambda mv: rank_key(mv[0])))
         else:
             result = set()
             inv_edges = self._get_inverse_edges(n)
@@ -431,7 +431,7 @@ class EdgeFeature:
                     result |= set(fwd_edges.tolist())
                 else:
                     result |= fwd_edges
-            return tuple(sorted(result, key=lambda m: Crank[m - 1]))
+            return tuple(sorted(result, key=rank_key))
 
     def freqList(
         self, nodeTypesFrom: set[str] | None = None, nodeTypesTo: set[str] | None = None

@@ -68,7 +68,11 @@ class StringPool:
         str | None
             String value or None if missing
         """
-        idx = self.indices[node - 1]
+        # Bounds check: return None for out-of-range nodes
+        arr_idx = node - 1
+        if arr_idx < 0 or arr_idx >= len(self.indices):
+            return None
+        idx = self.indices[arr_idx]
         if idx == MISSING_STR_INDEX:
             return None
         return self.strings[idx]
@@ -235,7 +239,11 @@ class IntFeatureArray:
         int | None
             Integer value or None if missing
         """
-        val = self.values[node - 1]
+        # Bounds check: return None for out-of-range nodes
+        arr_idx = node - 1
+        if arr_idx < 0 or arr_idx >= len(self.values):
+            return None
+        val = self.values[arr_idx]
         if val == self.MISSING:
             return None
         return int(val)
