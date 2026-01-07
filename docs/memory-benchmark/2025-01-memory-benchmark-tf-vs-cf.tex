@@ -549,28 +549,22 @@ The fork mode results deserve careful interpretation:
     \item \textbf{Platform availability}: Fork mode is discouraged on macOS (due to framework issues) and unavailable on Windows. Spawn mode results are more portable.
 \end{enumerate}
 
-\subsection{Scaling Analysis}
+\subsection{Production Scaling Analysis}
 
-Our benchmarks measured 4 workers. How do these results extrapolate to larger deployments?
-
-\subsubsection{Worker Scaling}
-
-\textbf{Text-Fabric} in spawn mode loads independent copies ($\sim$1.9 GB/worker), reaching 190 GB at 100 workers. Fork mode is nearly flat at $\sim$6.3 GB total (COW sharing), but requires that 6 GB minimum regardless of worker count.
-
-\textbf{Context-Fabric} in spawn mode uses $\sim$315 MB/worker (32 GB at 100 workers). Fork mode starts at 305 MB with $\sim$23 MB per additional worker (2.6 GB at 100 workers).
+We now consider how these results apply to a production environment: a Linux server running a corpus API (e.g., via gunicorn or uvicorn) that handles multiple concurrent requests. Production Python API servers typically use the prefork model---loading the application once, then forking worker processes to handle requests in parallel.
 
 \subsubsection{Multi-Corpus Scaling}
 
-A more compelling scenario for memory-mapped architectures is serving \emph{multiple corpora simultaneously}---for instance, an API that provides access to Hebrew, Greek, Syriac, and Coptic texts, or different versions of the same corpus.
+The most compelling advantage for memory-mapped architectures is serving \emph{multiple corpora simultaneously}---for instance, an API providing access to Hebrew, Greek, Syriac, and Coptic biblical texts, or multiple versions of the same corpus.
 
-With Text-Fabric, each corpus must be loaded entirely into RAM:
+With Text-Fabric, each corpus must be fully loaded into RAM:
 \begin{itemize}
     \item 1 corpus: 6.3 GB
     \item 2 corpora: 12.6 GB
-    \item 3 corpora: 18.9 GB (exceeds 16 GB VM)
+    \item 3 corpora: 18.9 GB (exceeds typical 16 GB VM)
 \end{itemize}
 
-With Context-Fabric, corpora share the memory-mapping infrastructure and only actively-accessed pages consume RAM:
+With Context-Fabric, each corpus adds only its resident working set:
 \begin{itemize}
     \item 1 corpus: 305 MB
     \item 2 corpora: $\sim$610 MB
@@ -578,49 +572,55 @@ With Context-Fabric, corpora share the memory-mapping infrastructure and only ac
     \item 50 corpora: $\sim$15 GB
 \end{itemize}
 
-This represents a \textbf{20$\times$ improvement} in corpus density. A single 16 GB server running Context-Fabric can serve dozens of corpora that would require dedicated machines under Text-Fabric.
+This represents a \textbf{20$\times$ improvement} in corpus density. A single 16 GB server running Context-Fabric can serve dozens of corpora that would require separate machines under Text-Fabric.
+
+\subsubsection{Worker Scaling (Fork Mode)}
+
+In the standard prefork deployment model, workers share copy-on-write memory with the parent process. Table~\ref{tab:scaling} shows projected memory consumption.
 
 \begin{table}[h]
 \centering
-\begin{tabular}{lrrrr}
+\begin{tabular}{lrr}
 \toprule
-\textbf{Workers} & \textbf{TF Spawn} & \textbf{CF Spawn} & \textbf{TF Fork} & \textbf{CF Fork}\footnote{CF fork mode has $\sim$23 MB per-worker overhead vs.\ near-zero for TF fork. At $\sim$260 workers, the two converge; beyond that TF fork uses less total memory. However, deployments exceeding 100 workers per machine are uncommon in practice.} \\
+\textbf{Workers} & \textbf{Text-Fabric} & \textbf{Context-Fabric} \\
 \midrule
-1 & 6.3 GB & 305 MB & 6.3 GB & 305 MB \\
-4 & 7.7 GB & 1.3 GB & 6.3 GB & 398 MB \\
-10 & 19 GB & 3.2 GB & 6.4 GB & 535 MB \\
-100 & 190 GB & 32 GB & 6.5 GB & 2.6 GB \\
+1 & 6.3 GB & 305 MB \\
+4 & 6.3 GB & 398 MB \\
+10 & 6.4 GB & 535 MB \\
+100 & 6.5 GB & 2.6 GB \\
 \bottomrule
 \end{tabular}
-\caption{Projected memory consumption by worker count (up to 100 workers)}
+\caption{Projected memory consumption in fork mode (production standard)}
 \label{tab:scaling}
 \end{table}
 
-\subsection{Implications for Production Deployments}
+Text-Fabric's fork mode scales efficiently (near-zero per-worker overhead via COW), but requires a 6.3 GB minimum regardless of worker count. Context-Fabric starts at 305 MB with $\sim$23 MB per additional worker.\footnote{At $\sim$260 workers, CF and TF fork mode converge in total memory; beyond that TF uses less. However, single-machine deployments rarely exceed 100 workers.}
 
-For a typical cloud VM with 16 GB RAM:
+For deployments with fewer than $\sim$50 workers (the common case), Context-Fabric uses dramatically less memory. The 6 GB floor for Text-Fabric means a 16 GB server can only dedicate $\sim$10 GB to other services, whereas Context-Fabric leaves $\sim$15.5 GB available.
+
+\subsection{Implications}
+
+On a typical 16 GB cloud VM running a corpus API:
 
 \begin{itemize}
-    \item \textbf{TF spawn mode}: Maximum 2--3 workers
-    \item \textbf{TF fork mode}: 2 effective workers (6 GB base leaves limited headroom)
-    \item \textbf{CF spawn mode}: $\sim$50 workers
-    \item \textbf{CF fork mode}: $\sim$50 workers (at 305 MB + 23 MB each)
+    \item \textbf{Text-Fabric}: 2 corpora maximum; $\sim$10 GB consumed before serving any requests
+    \item \textbf{Context-Fabric}: 20+ corpora feasible; $<$1 GB baseline for typical workloads
 \end{itemize}
 
-Within realistic deployment scales (up to $\sim$100 workers), CF maintains a significant advantage. The practical implications:
+The practical implications for production deployments:
 
 \begin{itemize}
-    \item \textbf{Lower infrastructure costs}: Fewer and smaller instances needed
-    \item \textbf{Higher throughput per dollar}: More concurrent requests per GB of RAM
-    \item \textbf{Modest hardware viability}: Corpus APIs can run on free-tier cloud instances or personal computers
-    \item \textbf{AI agent scalability}: Multiple concurrent AI conversations can query the same corpus without resource contention
+    \item \textbf{Lower infrastructure costs}: Smaller instances, fewer machines
+    \item \textbf{Multi-corpus APIs}: Serve Hebrew, Greek, Syriac, and more from one server
+    \item \textbf{AI agent scalability}: Multiple concurrent LLM conversations can query corpora without resource contention
+    \item \textbf{Modest hardware viability}: Corpus APIs can run on free-tier cloud instances
 \end{itemize}
 
 For serving AI agents via the Model Context Protocol, Context-Fabric enables what would otherwise be economically impractical: responsive, concurrent access to richly annotated corpora from standard cloud infrastructure.
 
 \section{Conclusion}
 
-This benchmark demonstrates that Context-Fabric's memory-mapped architecture achieves 84--95\% memory reduction compared to Text-Fabric across all tested deployment scenarios. The efficiency gains are most pronounced in fork-based production deployments, where Context-Fabric's 398 MB footprint (vs. 6.3 GB for Text-Fabric) enables a 200$\times$ improvement in worker density.
+This benchmark demonstrates that Context-Fabric's memory-mapped architecture achieves 84--95\% memory reduction compared to Text-Fabric across tested deployment scenarios. The efficiency gains are most pronounced in production API deployments: Context-Fabric's 305 MB baseline (vs.\ 6.3 GB for Text-Fabric) enables 20$\times$ higher corpus density, making multi-corpus APIs practical on modest hardware.
 
 \subsection{Toward AI-Powered Corpus Analysis}
 
