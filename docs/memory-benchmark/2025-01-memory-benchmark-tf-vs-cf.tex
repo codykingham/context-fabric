@@ -557,22 +557,26 @@ We now consider how these results apply to a production environment: a Linux ser
 
 The most compelling advantage for memory-mapped architectures is serving \emph{multiple corpora simultaneously}---for instance, an API providing access to Hebrew, Greek, Syriac, and Coptic biblical texts, or multiple versions of the same corpus.
 
-With Text-Fabric, each corpus must be fully loaded into RAM:
-\begin{itemize}
-    \item 1 corpus: 6.3 GB
-    \item 2 corpora: 12.6 GB
-    \item 3 corpora: 18.9 GB (exceeds typical 16 GB VM)
-\end{itemize}
+With Text-Fabric, each corpus must be fully loaded into RAM. With Context-Fabric, each corpus adds only its resident working set. Table~\ref{tab:corpus-scaling} shows projected memory consumption.
 
-With Context-Fabric, each corpus adds only its resident working set:
-\begin{itemize}
-    \item 1 corpus: 305 MB
-    \item 2 corpora: $\sim$610 MB
-    \item 10 corpora: $\sim$3 GB
-    \item 50 corpora: $\sim$15 GB
-\end{itemize}
+\begin{table}[h]
+\centering
+\begin{tabular}{lrr}
+\toprule
+\textbf{Corpora} & \textbf{Text-Fabric} & \textbf{Context-Fabric} \\
+\midrule
+1 & 6.3 GB & 305 MB \\
+2 & 12.6 GB & 610 MB \\
+3 & 18.9 GB & 915 MB \\
+10 & 63 GB & 3 GB \\
+50 & 315 GB & 15 GB \\
+\bottomrule
+\end{tabular}
+\caption{Projected memory consumption by corpus count (BHSA-sized corpora)}
+\label{tab:corpus-scaling}
+\end{table}
 
-This represents a \textbf{20$\times$ improvement} in corpus density. A single 16 GB server running Context-Fabric can serve dozens of corpora that would require separate machines under Text-Fabric.
+This represents a \textbf{20$\times$ improvement} in corpus density. A typical 16 GB server can host 2 corpora with Text-Fabric versus 50+ with Context-Fabric.
 
 \subsubsection{Worker Scaling (Fork Mode)}
 
