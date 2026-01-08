@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Edge features with string values (`@edgeValues` + `@valueType=str`) now compile and load correctly from `.cfm` cache
+- Compiler now preserves trailing whitespace in text format strings (e.g., `{word} ` in otext)
+  - Previously, `.strip()` was used when parsing metadata which removed significant trailing spaces
+  - This caused `T.text()` to produce different output between `.tf` and `.cfm` loading for corpora using format strings with literal trailing spaces (lxx, syrnt, tischendorf)
 - String edge values are encoded as integer indices with JSON lookup to enable memory-mapping
 - Removed silent fallback from corrupted `.cfm` to `.tf` loading - now fails loudly with actionable error message
 

@@ -354,9 +354,11 @@ class Compiler:
         i = 1
 
         # Parse metadata
+        # NOTE: Use rstrip('\n') not strip() to preserve trailing spaces in format strings
+        # e.g., @fmt:text-orig-full={word}  (trailing space is significant)
         while i < len(lines):
-            line = lines[i].strip()
-            if not line:
+            line = lines[i].rstrip('\n')
+            if not line.strip():  # Check for blank line (but don't strip the original)
                 i += 1
                 break
             if line == '@edgeValues':

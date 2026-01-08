@@ -76,3 +76,4 @@ htmlcov/
 
 # Others
 .private
+.corpora
