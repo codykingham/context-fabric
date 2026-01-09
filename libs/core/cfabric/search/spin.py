@@ -10,6 +10,8 @@ from random import randrange
 from inspect import signature
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 if TYPE_CHECKING:
     from cfabric.search.searchexe import SearchExe
 
@@ -24,6 +26,7 @@ from cfabric.search.syntax import (
     QEND,
 )
 from cfabric.utils.helpers import project
+from cfabric.storage.string_pool import StringPool, IntFeatureArray
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +34,12 @@ logger = logging.getLogger(__name__)
 
 
 def _spinAtom(searchExe: SearchExe, q: int) -> None:
+    """Build the initial candidate set (yarn) for a search atom.
+
+    This function filters nodes by type and feature constraints. When features
+    are backed by mmap storage (StringPool/IntFeatureArray), we use vectorized
+    numpy operations for significant performance improvement.
+    """
     F = searchExe.api.F
     Fs = searchExe.api.Fs
     maxNode = F.otype.maxNode
@@ -39,7 +48,8 @@ def _spinAtom(searchExe: SearchExe, q: int) -> None:
 
     (otype, features, src, quantifiers) = qnodes[q]
     featureList = sorted(features.items())
-    yarn = set()
+
+    # Get initial node set based on type
     nodeSet = (
         range(1, maxNode + 1)
         if otype == "."
@@ -47,44 +57,144 @@ def _spinAtom(searchExe: SearchExe, q: int) -> None:
         if sets is not None and otype in sets
         else F.otype.s(otype)
     )
-    for n in nodeSet:
-        good = True
-        for ft, val in featureList:
-            fval = Fs(ft).v(n)
-            if val is None:
-                if fval is not None:
-                    good = False
-                    break
-            elif val is True:
-                if fval is None:
-                    good = False
-                    break
-            elif isinstance(val, types.FunctionType):
-                if not val(fval):
-                    good = False
-                    break
-            elif isinstance(val, reTp):
-                if fval is None or not val.search(fval):
-                    good = False
-                    break
-            else:
-                (ident, val) = val
-                if ident is None and val is True:
-                    pass
-                elif ident:
-                    if fval not in val:
-                        good = False
-                        break
-                else:
-                    if fval in val:
-                        good = False
-                        break
-        if good:
-            yarn.add(n)
+
+    # Convert to set for fast operations
+    if isinstance(nodeSet, range):
+        yarn = set(nodeSet)
+    else:
+        yarn = set(nodeSet)
+
+    # Apply feature constraints
+    for ft, val in featureList:
+        feature = Fs(ft)
+        feature_data = feature._data if hasattr(feature, '_data') else None
+        is_mmap = isinstance(feature_data, (StringPool, IntFeatureArray))
+
+        if is_mmap and _can_vectorize_constraint(val):
+            # Use vectorized filtering for mmap-backed features
+            yarn = _vectorized_filter(yarn, feature_data, val)
+        else:
+            # Fall back to per-node lookup for complex constraints
+            yarn = _scalar_filter(yarn, feature, val)
+
+        # Early exit if no candidates remain
+        if not yarn:
+            break
+
     if quantifiers:
         for quantifier in quantifiers:
             yarn = _doQuantifier(searchExe, yarn, src, quantifier)
     searchExe.yarns[q] = yarn
+
+
+def _can_vectorize_constraint(val: Any) -> bool:
+    """Check if a constraint can be handled with vectorized operations.
+
+    Vectorizable constraints:
+    - None (feature must be missing)
+    - True (feature must exist)
+    - (True, set) for value in set (ident=True)
+    - (False, set) for value not in set (ident=False)
+    - (None, True) for any value exists
+
+    Non-vectorizable:
+    - Functions (custom predicates)
+    - Regex patterns
+    """
+    if val is None or val is True:
+        return True
+    if isinstance(val, (types.FunctionType, reTp)):
+        return False
+    if isinstance(val, tuple) and len(val) == 2:
+        ident, inner_val = val
+        # Can vectorize set membership checks
+        if ident is True or ident is False:
+            return isinstance(inner_val, (set, frozenset))
+        # (None, True) means any value exists - vectorizable
+        if ident is None and inner_val is True:
+            return True
+    return False
+
+
+def _vectorized_filter(
+    yarn: set[int],
+    feature_data: StringPool | IntFeatureArray,
+    val: Any
+) -> set[int]:
+    """Apply constraint using vectorized numpy operations.
+
+    Returns filtered yarn as a set.
+    """
+    nodes = list(yarn)
+    if not nodes:
+        return set()
+
+    if val is None:
+        # Feature must be missing
+        result = feature_data.filter_missing_value(nodes)
+    elif val is True:
+        # Feature must exist (have any value)
+        result = feature_data.filter_has_value(nodes)
+    elif isinstance(val, tuple):
+        ident, inner_val = val
+        if ident is None and inner_val is True:
+            # Any value exists
+            result = feature_data.filter_has_value(nodes)
+        elif ident is True:
+            # Value must be in set
+            if len(inner_val) == 1:
+                # Single value - use filter_by_value
+                single_val = next(iter(inner_val))
+                result = feature_data.filter_by_value(nodes, single_val)
+            else:
+                result = feature_data.filter_by_values(nodes, inner_val)
+        elif ident is False:
+            # Value must NOT be in set (exclusion)
+            # Get nodes that have the excluded values, then subtract
+            if len(inner_val) == 1:
+                single_val = next(iter(inner_val))
+                excluded = set(feature_data.filter_by_value(nodes, single_val))
+            else:
+                excluded = set(feature_data.filter_by_values(nodes, inner_val))
+            return yarn - excluded
+        else:
+            # Fallback - shouldn't reach here if _can_vectorize_constraint is correct
+            return yarn
+    else:
+        return yarn
+
+    return set(result)
+
+
+def _scalar_filter(yarn: set[int], feature: Any, val: Any) -> set[int]:
+    """Apply constraint using per-node lookup (fallback for complex constraints)."""
+    result = set()
+    for n in yarn:
+        fval = feature.v(n)
+        if val is None:
+            if fval is None:
+                result.add(n)
+        elif val is True:
+            if fval is not None:
+                result.add(n)
+        elif isinstance(val, types.FunctionType):
+            if val(fval):
+                result.add(n)
+        elif isinstance(val, reTp):
+            if fval is not None and val.search(fval):
+                result.add(n)
+        else:
+            (ident, inner_val) = val
+            if ident is None and inner_val is True:
+                if fval is not None:
+                    result.add(n)
+            elif ident:
+                if fval in inner_val:
+                    result.add(n)
+            else:
+                if fval not in inner_val:
+                    result.add(n)
+    return result
 
 
 def _doQuantifier(

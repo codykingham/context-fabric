@@ -160,9 +160,9 @@ class TestLoadCfm:
         assert len(slots) == 3  # phrase 6 has 3 words
 
     def test_load_cfm_node_features(self, compiled_corpus):
-        """load() correctly loads node features from .cfm."""
+        """loadAll() correctly loads node features from .cfm."""
         TF, test_dir = compiled_corpus
-        api = TF.load("")
+        api = TF.loadAll()
 
         # String feature
         assert api.F.word.v(1) == 'hello'
@@ -210,7 +210,7 @@ class TestCfmVsTfEquivalence:
                 silent='deep'
             )
             TF_cfm.compile()
-            api_cfm = TF_cfm.load("")
+            api_cfm = TF_cfm.loadAll()
 
             yield api_tf, api_cfm
 
@@ -355,7 +355,7 @@ class TestCfmSearchApi:
                 silent='deep'
             )
             TF.compile()
-            api = TF.load("")
+            api = TF.loadAll()
             yield api
 
     def test_search_simple_type(self, cfm_api):
@@ -414,7 +414,7 @@ class TestCfmTextApi:
                 silent='deep'
             )
             TF.compile()
-            api = TF.load("")
+            api = TF.loadAll()
             yield api
 
     def test_text_api_exists(self, cfm_api):
@@ -478,7 +478,7 @@ class TestCfmEdgeValuesNone:
                 silent='deep'
             )
             TF.compile()
-            api = TF.load("")
+            api = TF.loadAll()
             yield api
 
     def test_edge_values_none_vs_zero(self, cfm_api):
@@ -531,7 +531,7 @@ class TestCfmSectionsComputed:
                 modules=['mini_corpus'],
                 silent='deep'
             )
-            TF1.load('')  # This triggers compilation
+            TF1.loadAll()  # This triggers compilation
             del TF1  # Delete the instance
 
             # Stage 2: Load from cached .cfm (simulating kernel restart)
@@ -540,7 +540,7 @@ class TestCfmSectionsComputed:
                 modules=['mini_corpus'],
                 silent='deep'
             )
-            api = TF2.load('')  # This should load from .cfm cache
+            api = TF2.loadAll()  # This should load from .cfm cache
             yield api
 
     def test_sections_computed_exists(self, cfm_api_with_sections):
@@ -589,7 +589,7 @@ class TestCfmNodeFeatureNone:
                 silent='deep'
             )
             TF.compile()
-            api = TF.load("")
+            api = TF.loadAll()
             yield api
 
     def test_node_int_none_vs_zero(self, cfm_api):
@@ -721,7 +721,7 @@ class TestCfmSectionsCycle:
                 modules=['mini_corpus'],
                 silent='deep'
             )
-            api_fresh = TF1.load('')
+            api_fresh = TF1.loadAll()
 
             # Stage 2: Cached load
             TF2 = Fabric(
@@ -729,7 +729,7 @@ class TestCfmSectionsCycle:
                 modules=['mini_corpus'],
                 silent='deep'
             )
-            api_cached = TF2.load('')
+            api_cached = TF2.loadAll()
 
             yield api_fresh, api_cached, TF1, TF2
 
@@ -809,7 +809,7 @@ class TestCfmEdgeStringValues:
                 modules=['mini_corpus'],
                 silent='deep'
             )
-            api_cached = TF2.load('')
+            api_cached = TF2.loadAll()
 
             yield api_fresh, api_cached
 

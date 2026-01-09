@@ -442,6 +442,10 @@ class Text:
         good = True
         if len(self.sectionFeats) != 0 and len(self.sectionTypes) != 0:
             for fName in self.sectionFeatsWithLanguage:
+                fData = Fs(fName)
+                if fData is None:
+                    good = False
+                    continue
                 # Get metadata from api.F feature (has loaded metadata from .cfm)
                 # or fall back to TF.features (for .tf loading)
                 fFeature = getattr(api.F, fName, None)
@@ -454,12 +458,16 @@ class Text:
                 self.languages[code] = {
                     k: meta.get(k, "default") for k in ("language", "languageEnglish")
                 }
-                cData = Fs(fName).data
+                cData = fData.data
                 self.nameFromNode[code] = cData
                 self.nodeFromName[code] = dict(
                     ((fOtype(node), name), node) for (node, name) in cData.items()
                 )
             for fName in self.sectionFeats:
+                fData = api.Fs(fName)
+                if fData is None:
+                    good = False
+                    continue
                 # Get dataType from api.F feature or TF.features
                 fFeature = getattr(api.F, fName, None)
                 if fFeature is not None and hasattr(fFeature, 'meta'):
@@ -467,12 +475,13 @@ class Text:
                 else:
                     fObj = api.TF.features.get(fName)
                     dataType = fObj.dataType if fObj else 'str'
-                self.sectionFeatures.append(api.Fs(fName).data)
+                self.sectionFeatures.append(fData.data)
                 self.sectionFeatureTypes.append(dataType)
 
-            sec0 = self.sectionTypes[0]
-            setattr(self, f"{sec0}Name", self._sec0Name)
-            setattr(self, f"{sec0}Node", self._sec0Node)
+            if good:
+                sec0 = self.sectionTypes[0]
+                setattr(self, f"{sec0}Name", self._sec0Name)
+                setattr(self, f"{sec0}Node", self._sec0Node)
 
         self.formats: dict[str, str | None] = {}
         """The text representation formats that have been defined in your dataset.

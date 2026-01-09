@@ -4,6 +4,7 @@ Compressed Sparse Row (CSR) utilities for variable-length data.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -16,6 +17,11 @@ if TYPE_CHECKING:
 # Node indexing dtypes
 NODE_DTYPE = 'uint32'
 INDEX_DTYPE = 'uint32'
+
+# Environment variable to control embedding cache behavior
+# Values: "on" (default), "off"
+# Set CF_EMBEDDING_CACHE=off to disable automatic preloading
+_EMBEDDING_CACHE_MODE = os.environ.get('CF_EMBEDDING_CACHE', 'on').lower()
 
 
 class CSRArray:
@@ -34,8 +40,48 @@ class CSRArray:
     """
 
     def __init__(self, indptr: NDArray[np.uint32], data: NDArray[np.uint32]) -> None:
-        self.indptr = indptr
-        self.data = data
+        self._indptr = indptr
+        self._data = data
+        self._ram_indptr: NDArray[np.uint32] | None = None
+        self._ram_data: NDArray[np.uint32] | None = None
+
+    @property
+    def indptr(self) -> NDArray[np.uint32]:
+        """Return indptr, using RAM cache if available."""
+        return self._ram_indptr if self._ram_indptr is not None else self._indptr
+
+    @property
+    def data(self) -> NDArray[np.uint32]:
+        """Return data, using RAM cache if available."""
+        return self._ram_data if self._ram_data is not None else self._data
+
+    @property
+    def is_cached(self) -> bool:
+        """Return True if data is cached in RAM."""
+        return self._ram_indptr is not None
+
+    def preload_to_ram(self) -> None:
+        """Load CSR data into RAM for faster access.
+
+        This trades memory for speed. Use when you need fast repeated
+        access to the CSR data (e.g., embedding queries).
+
+        Memory cost: indptr.nbytes + data.nbytes (typically 50-100MB for BHSA)
+        """
+        if self._ram_indptr is None:
+            self._ram_indptr = np.array(self._indptr)
+            self._ram_data = np.array(self._data)
+
+    def release_cache(self) -> None:
+        """Release RAM cache, returning to mmap-only access."""
+        self._ram_indptr = None
+        self._ram_data = None
+
+    def memory_usage_bytes(self) -> int:
+        """Return memory used by RAM cache, or 0 if not cached."""
+        if self._ram_indptr is None:
+            return 0
+        return self._ram_indptr.nbytes + self._ram_data.nbytes
 
     def __getitem__(self, i: int) -> tuple[int, ...]:
         """Get data for row i as tuple."""
@@ -88,6 +134,93 @@ class CSRArray:
         data = np.load(f"{path_prefix}_data.npy", mmap_mode=mmap_mode)
         return cls(indptr, data)
 
+    def get_all_targets(self, sources: set[int]) -> set[int]:
+        """Get union of all targets for a set of source nodes.
+
+        Parameters
+        ----------
+        sources : set[int]
+            Source node IDs (1-indexed)
+
+        Returns
+        -------
+        set[int]
+            Union of all targets from all sources
+        """
+        if not sources:
+            return set()
+
+        # Convert to 0-indexed array indices
+        source_arr = np.array(list(sources), dtype=np.int64) - 1
+        valid_mask = (source_arr >= 0) & (source_arr < len(self))
+        valid_sources = source_arr[valid_mask]
+
+        if len(valid_sources) == 0:
+            return set()
+
+        # Collect all targets using vectorized slicing
+        all_targets = []
+        for idx in valid_sources:
+            start, end = self.indptr[idx], self.indptr[idx + 1]
+            if start < end:
+                all_targets.append(self.data[start:end])
+
+        if not all_targets:
+            return set()
+
+        return set(np.concatenate(all_targets).tolist())
+
+    def filter_sources_with_targets_in(
+        self, sources: set[int], target_set: set[int]
+    ) -> tuple[set[int], set[int]]:
+        """Filter sources that have at least one target in target_set.
+
+        Returns both the filtered sources AND the matched targets.
+        This is the core operation for relation spinning.
+
+        Parameters
+        ----------
+        sources : set[int]
+            Source node IDs (1-indexed)
+        target_set : set[int]
+            Target node IDs to match against (1-indexed)
+
+        Returns
+        -------
+        tuple[set[int], set[int]]
+            (filtered_sources, matched_targets) - sources with matches and targets that were matched
+        """
+        if not sources or not target_set:
+            return set(), set()
+
+        matched_sources = set()
+        matched_targets = set()
+        csr_len = len(self)
+
+        # Direct iteration with cached indptr/data references
+        indptr = self.indptr
+        data = self.data
+
+        for src in sources:
+            idx = src - 1
+            if idx < 0 or idx >= csr_len:
+                continue
+
+            start = indptr[idx]
+            end = indptr[idx + 1]
+            if start >= end:
+                continue
+
+            # Get targets for this source
+            targets = data[start:end]
+
+            # Check which targets are in the target set
+            for t in targets:
+                if t in target_set:
+                    matched_sources.add(src)
+                    matched_targets.add(int(t))
+
+        return matched_sources, matched_targets
 
 class CSRArrayWithValues(CSRArray):
     """CSR with associated values (for edge features with values)."""

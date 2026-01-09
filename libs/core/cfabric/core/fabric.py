@@ -344,8 +344,22 @@ class Fabric:
                     if api is not None:
                         self.api = api
                         self._loaded_from_cfm = True
+                        self._cfm_mmap_mgr = mmap_mgr  # Store for loading additional features
                         setattr(self, "isLoaded", self.api.isLoaded)
-                        logger.info("All features loaded from .cfm format")
+
+                        # Load requested features from cfm
+                        featuresRequested = set(fitemize(features))
+                        if featuresRequested:
+                            meta = mmap_mgr.meta
+                            node_features = set(meta.get('features', {}).get('node', []))
+                            edge_features = set(meta.get('features', {}).get('edge', []))
+                            for fname in featuresRequested & node_features:
+                                self._loadNodeFeatureFromCfm(api, mmap_mgr, fname)
+                            for fname in featuresRequested & edge_features:
+                                self._loadEdgeFeatureFromCfm(api, mmap_mgr, fname)
+                            logger.info(f"Loaded {len(featuresRequested)} features from .cfm format")
+                        else:
+                            logger.info("Loaded WARP features from .cfm format")
                         return api
                 except Exception as e:
                     logger.error(f".cfm cache exists but failed to load: {e}")
@@ -555,11 +569,39 @@ class Fabric:
 
         silent = silentConvert(silent)
         api = self.load("", silent=silent)
-        # If loaded from cfm, all features are already loaded
-        if not getattr(self, '_loaded_from_cfm', False):
+
+        # If loading failed, return early
+        if api is False or api is None:
+            return api
+
+        if getattr(self, '_loaded_from_cfm', False):
+            # Load all features from cfm
+            mmap_mgr = self._cfm_mmap_mgr
+            meta = mmap_mgr.meta
+            node_features = meta.get('features', {}).get('node', [])
+            logger.info(f"Loading {len(node_features)} node features from .cfm")
+            for fname in node_features:
+                self._loadNodeFeatureFromCfm(api, mmap_mgr, fname)
+                logger.info(f"  Loaded {fname}, hasattr={hasattr(api.F, fname)}")
+            edge_features = meta.get('features', {}).get('edge', [])
+            logger.info(f"Loading {len(edge_features)} edge features from .cfm")
+            for fname in edge_features:
+                self._loadEdgeFeatureFromCfm(api, mmap_mgr, fname)
+        else:
             allFeatures = self.explore(silent=silent, show=True)
             loadableFeatures = allFeatures["nodes"] + allFeatures["edges"]
             self.load(loadableFeatures, add=True, silent=silent)
+
+        # Re-create Text after features are loaded (Text caches format functions)
+        if getattr(self, '_loaded_from_cfm', False):
+            addText(api)
+
+        # Compute sections (requires section features to be loaded)
+        if getattr(self, 'sectionsOK', False) and hasattr(self, 'sectionTypes'):
+            sections_data = sectionsFromApi(api, self.sectionTypes, self.sectionFeats)
+            if sections_data:
+                setattr(api.C, 'sections', Computed(api, sections_data))
+
         return api
 
     def save(
@@ -1198,6 +1240,9 @@ class Fabric:
     def _makeApiFromCfm(self, mmap_mgr: MmapManager) -> Api | None:
         """Build API from memory-mapped .cfm data.
 
+        Only loads WARP features (otype, oslots) and computed data.
+        Use loadAll() to load all features.
+
         Parameters
         ----------
         mmap_mgr : MmapManager
@@ -1250,20 +1295,8 @@ class Fabric:
         # Setup otype support dict (needed for otype.s())
         self._setupOtypeSupport(otype_feature, otype_arr, type_list_raw, max_slot, max_node)
 
-        # Load node features
-        meta = mmap_mgr.meta
-        node_feature_names = meta.get('features', {}).get('node', [])
-        for fname in node_feature_names:
-            logger.debug(f"  Loading feature {fname}...")
-            self._loadNodeFeatureFromCfm(api, mmap_mgr, fname)
-
-        # Load edge features
-        edge_feature_names = meta.get('features', {}).get('edge', [])
-        for fname in edge_feature_names:
-            logger.debug(f"  Loading edge {fname}...")
-            self._loadEdgeFeatureFromCfm(api, mmap_mgr, fname)
-
         # Setup otext-related attributes from meta.json
+        meta = mmap_mgr.meta
         otextMeta = meta.get('otext', {})
         self.sectionFeats = itemize(otextMeta.get("sectionFeatures", ""), ",")
         self.sectionTypes = itemize(otextMeta.get("sectionTypes", ""), ",")
@@ -1277,6 +1310,7 @@ class Fabric:
         # Setup sectionFeatsWithLanguage (include primary section feat and language variants)
         if self.sectionFeats:
             primary_feat = self.sectionFeats[0]
+            node_feature_names = meta.get('features', {}).get('node', [])
             self.sectionFeatsWithLanguage = tuple(
                 f for f in node_feature_names
                 if f == primary_feat or f.startswith(f"{primary_feat}@")
@@ -1288,13 +1322,6 @@ class Fabric:
         addOtype(api)
         addNodes(api)
         addLocality(api)
-
-        # Compute sections (needs L.u() from locality)
-        if self.sectionsOK:
-            sections_data = sectionsFromApi(api, self.sectionTypes, self.sectionFeats)
-            if sections_data:
-                setattr(api.C, 'sections', Computed(api, sections_data))
-
         addText(api)
         addSearch(api, self.silent)
 
@@ -1349,6 +1376,14 @@ class Fabric:
         # Load levDown (CSR)
         levdown_csr = mmap_mgr.get_csr('computed', 'levdown')
         setattr(api.C, 'levDown', LevDownComputed(api, levdown_csr))
+
+        # Auto-preload embedding structures for fast queries
+        # This trades ~100MB RAM for ~1.7x speedup on embedding queries
+        # Set CF_EMBEDDING_CACHE=off to disable
+        from cfabric.storage.csr import _EMBEDDING_CACHE_MODE
+        if _EMBEDDING_CACHE_MODE != 'off':
+            api.C.levUp.preload()
+            api.C.levDown.preload()
 
         # Load levels (JSON)
         try:

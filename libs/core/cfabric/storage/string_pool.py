@@ -198,6 +198,192 @@ class StringPool:
         indices = np.load(f"{path_prefix}_idx.npy", mmap_mode=mmap_mode)
         return cls(strings, indices)
 
+    def get_value_index(self, value: str) -> int | None:
+        """
+        Get the internal index for a string value.
+
+        Useful for pre-computing indices for repeated filtering operations.
+
+        Parameters
+        ----------
+        value : str
+            String value to look up
+
+        Returns
+        -------
+        int | None
+            Internal index, or None if value doesn't exist
+        """
+        # Linear search through strings array (typically small)
+        for i, s in enumerate(self.strings):
+            if s == value:
+                return i
+        return None
+
+    def filter_by_value(
+        self, nodes: list[int] | range, value: str
+    ) -> NDArray[np.int64]:
+        """
+        Vectorized filter: return nodes where feature equals value.
+
+        This is much faster than calling get() in a loop because it uses
+        numpy vectorized operations instead of per-element Python calls.
+
+        Parameters
+        ----------
+        nodes : list[int] | range
+            Nodes to filter (1-indexed)
+        value : str
+            Value to match
+
+        Returns
+        -------
+        NDArray[np.int64]
+            Array of matching nodes (1-indexed)
+        """
+        if not nodes:
+            return np.array([], dtype=np.int64)
+
+        # Find the index for this value
+        value_idx = self.get_value_index(value)
+        if value_idx is None:
+            return np.array([], dtype=np.int64)
+
+        # Convert nodes to 0-indexed array indices
+        node_arr = np.asarray(nodes, dtype=np.int64)
+        arr_indices = node_arr - 1
+
+        # Bounds check: only keep valid indices
+        valid_mask = (arr_indices >= 0) & (arr_indices < len(self.indices))
+        valid_arr_indices = arr_indices[valid_mask]
+        valid_nodes = node_arr[valid_mask]
+
+        # Vectorized lookup and comparison
+        values_at_nodes = self.indices[valid_arr_indices]
+        match_mask = values_at_nodes == value_idx
+
+        return valid_nodes[match_mask]
+
+    def filter_by_values(
+        self, nodes: list[int] | range, values: set[str]
+    ) -> NDArray[np.int64]:
+        """
+        Vectorized filter: return nodes where feature is in values set.
+
+        Parameters
+        ----------
+        nodes : list[int] | range
+            Nodes to filter (1-indexed)
+        values : set[str]
+            Set of values to match
+
+        Returns
+        -------
+        NDArray[np.int64]
+            Array of matching nodes (1-indexed)
+        """
+        if not nodes or not values:
+            return np.array([], dtype=np.int64)
+
+        # Find indices for all values
+        value_indices = set()
+        for v in values:
+            idx = self.get_value_index(v)
+            if idx is not None:
+                value_indices.add(idx)
+
+        if not value_indices:
+            return np.array([], dtype=np.int64)
+
+        # Convert nodes to 0-indexed array indices
+        node_arr = np.asarray(nodes, dtype=np.int64)
+        arr_indices = node_arr - 1
+
+        # Bounds check
+        valid_mask = (arr_indices >= 0) & (arr_indices < len(self.indices))
+        valid_arr_indices = arr_indices[valid_mask]
+        valid_nodes = node_arr[valid_mask]
+
+        # Vectorized lookup
+        values_at_nodes = self.indices[valid_arr_indices]
+
+        # Check if each value is in the target set
+        match_mask = np.isin(values_at_nodes, list(value_indices))
+
+        return valid_nodes[match_mask]
+
+    def filter_has_value(self, nodes: list[int] | range) -> NDArray[np.int64]:
+        """
+        Vectorized filter: return nodes that have any value.
+
+        Parameters
+        ----------
+        nodes : list[int] | range
+            Nodes to filter (1-indexed)
+
+        Returns
+        -------
+        NDArray[np.int64]
+            Array of nodes with values (1-indexed)
+        """
+        if not nodes:
+            return np.array([], dtype=np.int64)
+
+        node_arr = np.asarray(nodes, dtype=np.int64)
+        arr_indices = node_arr - 1
+
+        valid_mask = (arr_indices >= 0) & (arr_indices < len(self.indices))
+        valid_arr_indices = arr_indices[valid_mask]
+        valid_nodes = node_arr[valid_mask]
+
+        values_at_nodes = self.indices[valid_arr_indices]
+        has_value_mask = values_at_nodes != MISSING_STR_INDEX
+
+        return valid_nodes[has_value_mask]
+
+    def filter_missing_value(self, nodes: list[int] | range) -> NDArray[np.int64]:
+        """
+        Vectorized filter: return nodes that have no value.
+
+        Parameters
+        ----------
+        nodes : list[int] | range
+            Nodes to filter (1-indexed)
+
+        Returns
+        -------
+        NDArray[np.int64]
+            Array of nodes without values (1-indexed)
+        """
+        if not nodes:
+            return np.array([], dtype=np.int64)
+
+        node_arr = np.asarray(nodes, dtype=np.int64)
+        arr_indices = node_arr - 1
+
+        valid_mask = (arr_indices >= 0) & (arr_indices < len(self.indices))
+        valid_arr_indices = arr_indices[valid_mask]
+        valid_nodes = node_arr[valid_mask]
+
+        values_at_nodes = self.indices[valid_arr_indices]
+        missing_mask = values_at_nodes == MISSING_STR_INDEX
+
+        return valid_nodes[missing_mask]
+
+    def get_frequency_counts(self) -> dict[str, int]:
+        """
+        Get frequency counts of all values using vectorized numpy operations.
+
+        Returns
+        -------
+        dict[str, int]
+            Mapping from string value to count
+        """
+        valid_mask = self.indices != MISSING_STR_INDEX
+        valid_indices = self.indices[valid_mask]
+        unique_idx, counts = np.unique(valid_indices, return_counts=True)
+        return {self.strings[idx]: int(count) for idx, count in zip(unique_idx, counts)}
+
 
 class IntFeatureArray:
     """
@@ -359,3 +545,209 @@ class IntFeatureArray:
         """
         values = np.load(path, mmap_mode=mmap_mode)
         return cls(values)
+
+    def filter_by_value(
+        self, nodes: list[int] | range, value: int
+    ) -> NDArray[np.int64]:
+        """
+        Vectorized filter: return nodes where feature equals value.
+
+        Parameters
+        ----------
+        nodes : list[int] | range
+            Nodes to filter (1-indexed)
+        value : int
+            Value to match
+
+        Returns
+        -------
+        NDArray[np.int64]
+            Array of matching nodes (1-indexed)
+        """
+        if not nodes:
+            return np.array([], dtype=np.int64)
+
+        node_arr = np.asarray(nodes, dtype=np.int64)
+        arr_indices = node_arr - 1
+
+        valid_mask = (arr_indices >= 0) & (arr_indices < len(self.values))
+        valid_arr_indices = arr_indices[valid_mask]
+        valid_nodes = node_arr[valid_mask]
+
+        values_at_nodes = self.values[valid_arr_indices]
+        match_mask = values_at_nodes == value
+
+        return valid_nodes[match_mask]
+
+    def filter_by_values(
+        self, nodes: list[int] | range, values: set[int]
+    ) -> NDArray[np.int64]:
+        """
+        Vectorized filter: return nodes where feature is in values set.
+
+        Parameters
+        ----------
+        nodes : list[int] | range
+            Nodes to filter (1-indexed)
+        values : set[int]
+            Set of values to match
+
+        Returns
+        -------
+        NDArray[np.int64]
+            Array of matching nodes (1-indexed)
+        """
+        if not nodes or not values:
+            return np.array([], dtype=np.int64)
+
+        node_arr = np.asarray(nodes, dtype=np.int64)
+        arr_indices = node_arr - 1
+
+        valid_mask = (arr_indices >= 0) & (arr_indices < len(self.values))
+        valid_arr_indices = arr_indices[valid_mask]
+        valid_nodes = node_arr[valid_mask]
+
+        values_at_nodes = self.values[valid_arr_indices]
+        match_mask = np.isin(values_at_nodes, list(values))
+
+        return valid_nodes[match_mask]
+
+    def filter_less_than(
+        self, nodes: list[int] | range, threshold: int
+    ) -> NDArray[np.int64]:
+        """
+        Vectorized filter: return nodes where value < threshold.
+
+        Parameters
+        ----------
+        nodes : list[int] | range
+            Nodes to filter (1-indexed)
+        threshold : int
+            Threshold value
+
+        Returns
+        -------
+        NDArray[np.int64]
+            Array of matching nodes (1-indexed)
+        """
+        if not nodes:
+            return np.array([], dtype=np.int64)
+
+        node_arr = np.asarray(nodes, dtype=np.int64)
+        arr_indices = node_arr - 1
+
+        valid_mask = (arr_indices >= 0) & (arr_indices < len(self.values))
+        valid_arr_indices = arr_indices[valid_mask]
+        valid_nodes = node_arr[valid_mask]
+
+        values_at_nodes = self.values[valid_arr_indices]
+        # Must have a value AND be less than threshold
+        match_mask = (values_at_nodes != self.MISSING) & (values_at_nodes < threshold)
+
+        return valid_nodes[match_mask]
+
+    def filter_greater_than(
+        self, nodes: list[int] | range, threshold: int
+    ) -> NDArray[np.int64]:
+        """
+        Vectorized filter: return nodes where value > threshold.
+
+        Parameters
+        ----------
+        nodes : list[int] | range
+            Nodes to filter (1-indexed)
+        threshold : int
+            Threshold value
+
+        Returns
+        -------
+        NDArray[np.int64]
+            Array of matching nodes (1-indexed)
+        """
+        if not nodes:
+            return np.array([], dtype=np.int64)
+
+        node_arr = np.asarray(nodes, dtype=np.int64)
+        arr_indices = node_arr - 1
+
+        valid_mask = (arr_indices >= 0) & (arr_indices < len(self.values))
+        valid_arr_indices = arr_indices[valid_mask]
+        valid_nodes = node_arr[valid_mask]
+
+        values_at_nodes = self.values[valid_arr_indices]
+        # Must have a value AND be greater than threshold
+        match_mask = (values_at_nodes != self.MISSING) & (values_at_nodes > threshold)
+
+        return valid_nodes[match_mask]
+
+    def filter_has_value(self, nodes: list[int] | range) -> NDArray[np.int64]:
+        """
+        Vectorized filter: return nodes that have any value.
+
+        Parameters
+        ----------
+        nodes : list[int] | range
+            Nodes to filter (1-indexed)
+
+        Returns
+        -------
+        NDArray[np.int64]
+            Array of nodes with values (1-indexed)
+        """
+        if not nodes:
+            return np.array([], dtype=np.int64)
+
+        node_arr = np.asarray(nodes, dtype=np.int64)
+        arr_indices = node_arr - 1
+
+        valid_mask = (arr_indices >= 0) & (arr_indices < len(self.values))
+        valid_arr_indices = arr_indices[valid_mask]
+        valid_nodes = node_arr[valid_mask]
+
+        values_at_nodes = self.values[valid_arr_indices]
+        has_value_mask = values_at_nodes != self.MISSING
+
+        return valid_nodes[has_value_mask]
+
+    def filter_missing_value(self, nodes: list[int] | range) -> NDArray[np.int64]:
+        """
+        Vectorized filter: return nodes that have no value.
+
+        Parameters
+        ----------
+        nodes : list[int] | range
+            Nodes to filter (1-indexed)
+
+        Returns
+        -------
+        NDArray[np.int64]
+            Array of nodes without values (1-indexed)
+        """
+        if not nodes:
+            return np.array([], dtype=np.int64)
+
+        node_arr = np.asarray(nodes, dtype=np.int64)
+        arr_indices = node_arr - 1
+
+        valid_mask = (arr_indices >= 0) & (arr_indices < len(self.values))
+        valid_arr_indices = arr_indices[valid_mask]
+        valid_nodes = node_arr[valid_mask]
+
+        values_at_nodes = self.values[valid_arr_indices]
+        missing_mask = values_at_nodes == self.MISSING
+
+        return valid_nodes[missing_mask]
+
+    def get_frequency_counts(self) -> dict[int, int]:
+        """
+        Get frequency counts of all values using vectorized numpy operations.
+
+        Returns
+        -------
+        dict[int, int]
+            Mapping from integer value to count
+        """
+        valid_mask = self.values != self.MISSING
+        valid_values = self.values[valid_mask]
+        unique_vals, counts = np.unique(valid_values, return_counts=True)
+        return {int(val): int(count) for val, count in zip(unique_vals, counts)}

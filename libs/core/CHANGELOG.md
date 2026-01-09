@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-01-09 ([ck])
+
+### Performance
+- Vectorized feature filtering in StringPool/IntFeatureArray (~8x algorithmic speedup, ~1.3x net vs TF)
+- Embedding relationship cache with RAM preloading (~1.7x speedup, offsetting mmap overhead; trades ~100MB RAM)
+- SPIN search algorithm uses vectorized constraint filtering for mmap-backed features
+
+### Changed
+- Fix load("") behavior: empty string no longer loads all features
+- Auto-preload embedding cache by default (controlled by CF_EMBEDDING_CACHE env var)
+
+### Added
+- Public preload API: C.levUp.preload(), C.levDown.preload(), .release(), .is_cached
+
 ## [0.4.1] - 2026-01-08 ([ck])
 
 ### Fixed

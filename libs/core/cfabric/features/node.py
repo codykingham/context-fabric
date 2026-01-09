@@ -150,12 +150,10 @@ class NodeFeature:
         rank_key = safe_rank_key(self.api.C.rank.data)
 
         if self._is_mmap:
-            # For mmap, we need to scan all nodes
-            matches = []
+            # Use vectorized filtering for mmap-backed features
             max_node = len(self._data)
-            for n in range(1, max_node + 1):
-                if self.v(n) == val:
-                    matches.append(n)
+            all_nodes = range(1, max_node + 1)
+            matches = self._data.filter_by_value(all_nodes, val)
             return tuple(sorted(matches, key=rank_key))
         else:
             return tuple(
@@ -183,24 +181,28 @@ class NodeFeature:
             highest frequencies first.
 
         """
+        fql: collections.Counter[str | int] = collections.Counter()
 
-        fql = collections.Counter()
-        fOtype = self.api.F.otype.v if nodeTypes else None
-
-        if self._is_mmap:
+        if self._is_mmap and nodeTypes is None:
+            # Fast path: vectorized frequency counting
+            fql.update(self._data.get_frequency_counts())
+        elif self._is_mmap:
+            # Mmap with type filtering - need per-node iteration
+            fOtype = self.api.F.otype.v
             max_node = len(self._data)
             for n in range(1, max_node + 1):
                 val = self.v(n)
-                if val is not None:
-                    if nodeTypes is None or fOtype(n) in nodeTypes:
-                        fql[val] += 1
+                if val is not None and fOtype(n) in nodeTypes:
+                    fql[val] += 1
+        elif nodeTypes is None:
+            # Dict-backed, no filtering
+            for n in self._data:
+                fql[self._data[n]] += 1
         else:
-            if nodeTypes is None:
-                for n in self._data:
+            # Dict-backed with type filtering
+            fOtype = self.api.F.otype.v
+            for n in self._data:
+                if fOtype(n) in nodeTypes:
                     fql[self._data[n]] += 1
-            else:
-                for n in self._data:
-                    if fOtype(n) in nodeTypes:
-                        fql[self._data[n]] += 1
 
         return tuple(sorted(fql.items(), key=lambda x: (-x[1], x[0])))
