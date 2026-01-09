@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-01-09 ([ck])
+
+### Fixed
+- Path expansion bug in `expandDir()` that incorrectly handled hidden directory paths
+  - `.corpora` was resolved to `{cwd}corpora` instead of `{cwd}/.corpora` (missing separator)
+  - Caused by `str.replace(".", curDir, 1)` which didn't add a path separator
+  - Now correctly handles: `.hidden` dirs, `./explicit` refs, bare `.`, and relative paths
+
 ## [0.5.0] - 2026-01-09 ([ck])
 
 ### Performance

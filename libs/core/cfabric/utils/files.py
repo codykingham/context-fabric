@@ -102,8 +102,15 @@ def expandDir(obj: Any, dirName: str) -> str:
         dirName = dirName.replace("~", obj.homeDir, 1)
     elif dirName.startswith(".."):
         dirName = dirName.replace("..", obj.parentDir, 1)
-    elif dirName.startswith("."):
-        dirName = dirName.replace(".", obj.curDir, 1)
+    elif dirName.startswith("./"):
+        # Explicit current directory reference: ./foo -> curDir/foo
+        dirName = obj.curDir + dirName[1:]
+    elif dirName == ".":
+        # Bare "." means current directory
+        dirName = obj.curDir
+    elif not dirName.startswith("/"):
+        # Relative path (including hidden dirs like .corpora) -> curDir/path
+        dirName = obj.curDir + "/" + dirName
     return normpath(dirName)
 
 
