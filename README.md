@@ -34,6 +34,8 @@ Context-Fabric brings corpus analysis into the AI era. Built on the proven [Text
 - **Powerful Data Model** — Standoff annotation, graph traversal, pattern search, and arbitrary feature annotations.
 - **Dramatic Efficiency** — 3.5x faster loads, 65% less memory in single process, 62% less with parallel workers.
 
+→ [Read the Technical Paper](docs/intro-to-cf/intro-to-cf.pdf)
+
 ---
 
 ## MCP Server for AI Agents
