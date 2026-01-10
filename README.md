@@ -159,6 +159,12 @@ cfabric-bench memory --corpus path/to/corpus
 - [Benchmarks Changelog](libs/benchmarks/CHANGELOG.md)
 - [Testing Guide](TESTING.md)
 
+## Citation
+
+If you use Context-Fabric in your research, please cite:
+
+> Kingham, Cody. "Carrying Text-Fabric Forward: Context-Fabric and the Scalable Corpus Ecosystem." January 2026.
+
 ## Authors
 
 Context-Fabric by [Cody Kingham](https://github.com/codykingham), built on [Text-Fabric](https://github.com/annotation/text-fabric) by [Dirk Roorda](https://github.com/dirkroorda).
