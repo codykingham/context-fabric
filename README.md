@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <em>AI agents analyzing ancient Hebrew text via the Model Context Protocol</em>
+  <em>AI agents running advanced grammatical queries via the Model Context Protocol</em>
 </p>
 
 ---
