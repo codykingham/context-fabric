@@ -91,7 +91,7 @@ for result in api.S.search(query):
         <ul className="space-y-3">
           <li>
             <Link
-              href="/paper"
+              href="/docs/paper"
               className="text-[var(--color-accent)] hover:underline"
             >
               Introduction to Context-Fabric (Paper)

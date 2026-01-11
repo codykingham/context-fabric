@@ -1,0 +1,41 @@
+# Architecture
+
+Context-Fabric uses memory-mapped storage for predictable performance and efficient multi-corpus analysis.
+
+## Memory-Mapped Storage
+
+Instead of loading corpus data into Python objects, Context-Fabric maps compiled files directly into the process's address space. The operating system handles paging data in and out as needed.
+
+| Characteristic | Context-Fabric | Text-Fabric |
+|---------------|----------------|-------------|
+| Initial load time | Near-instant | Proportional to corpus size |
+| Memory per corpus | ~127 MB | ~677 MB |
+| Multiple corpora | Linear scaling | Superlinear scaling |
+
+This enables:
+
+- **Multi-corpus analysis**: Load Hebrew Bible, Septuagint, Dead Sea Scrolls, and Greek New Testament simultaneously on a laptop
+- **Production deployments**: Predictable resource usage across concurrent requests
+
+## Multi-Process Sharing
+
+Multiple processes reading the same corpus share physical memory pages at the OS level:
+
+```
+Process 1 ─┐
+Process 2 ──┼── Shared mmap pages ── .cfm files
+Process 3 ─┘
+```
+
+Four workers don't use four times the memory—they share read-only data transparently.
+
+## Benchmark Summary
+
+With 10 corpora loaded simultaneously:
+
+| Metric | Context-Fabric | Text-Fabric |
+|--------|----------------|-------------|
+| Total memory | 1,348 MB | 5,529 MB |
+| Memory variance | ±7 MB | ±949 MB |
+
+For detailed benchmarks and methodology, see the [technical paper](/docs/paper).

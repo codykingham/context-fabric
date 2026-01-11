@@ -1,0 +1,101 @@
+# File Formats
+
+Context-Fabric uses a **standoff annotation** architecture where each feature is stored in its own file. This design enables selective loading, sparse storage, and nimble data processing.
+
+## The Problem with Inline Annotation
+
+Traditional corpus formats like XML embed all annotations directly in the text:
+
+```xml
+<sentence id="1">
+  <phrase type="subject">
+    <word pos="preposition" lemma="in">In</word>
+    <word pos="article" lemma="the">the</word>
+    <word pos="noun" lemma="beginning">beginning</word>
+  </phrase>
+  <phrase type="predicate">
+    <word pos="noun" lemma="God">God</word>
+    <word pos="verb" lemma="create" tense="past">created</word>
+    ...
+  </phrase>
+</sentence>
+```
+
+This approach has significant drawbacks:
+
+- **All-or-nothing loading**: To access one feature, you must parse the entire file
+- **Verbose storage**: Every element repeats structural markup
+- **Difficult to extend**: Adding a new annotation layer means modifying the original file
+- **Version control friction**: Any change touches the same monolithic file
+
+## Standoff Annotation
+
+Standoff annotation stores each feature in a **separate file**. The text structure is defined once, and annotations reference it by node ID:
+
+```
+corpus/
+├── otype.tf      # Node types: word, phrase, sentence
+├── oslots.tf     # Which words each phrase/sentence contains
+├── word.tf       # The actual word text
+├── pos.tf        # Part of speech (only for words that have it)
+├── lemma.tf      # Lemma (only for words that have it)
+├── tense.tf      # Tense (only for verbs)
+└── ...
+```
+
+Each file is independent. You can:
+
+- **Load selectively**: Only load the features you need for your analysis
+- **Store sparsely**: Features with gaps (like tense, which only applies to verbs) don't waste space on empty values
+- **Extend freely**: Add new annotation layers without touching existing files
+- **Version independently**: Track changes to each feature separately
+
+## Two Format Layers
+
+Context-Fabric uses two complementary formats:
+
+### TF Format (Text-Fabric)
+
+Human-readable text files with `.tf` extension. These are the source format:
+
+- Easy to read, edit, and version control
+- Used for corpus distribution and interchange
+- Three types: node features, edge features, and configuration
+
+See [TF Format](/docs/file-formats/tf-format) for syntax details.
+
+### CFM Format (Context-Fabric Memory-mapped)
+
+Compiled binary format with `.cfm` extension. This is the runtime format:
+
+- Memory-mapped NumPy arrays for instant loading
+- Automatic compilation from TF on first load
+- Enables multi-process access without duplication
+
+See [CFM Format](/docs/file-formats/cfm-format) for details.
+
+## Required Features
+
+Every corpus must define three special "WARP" features:
+
+| Feature | Type | Purpose |
+|---------|------|---------|
+| `otype` | Node | Maps each node to its type (word, phrase, sentence, etc.) |
+| `oslots` | Edge | Maps non-slot nodes to the slots they contain |
+| `otext` | Config | Defines text rendering and section structure |
+
+These establish the fundamental graph structure that all other features build upon.
+
+## Benefits for Corpus Linguistics
+
+The standoff architecture is particularly valuable for linguistic corpora:
+
+1. **Layered annotation**: Morphology, syntax, semantics, and discourse can each live in separate files, maintained by different teams
+
+2. **Selective analysis**: Load only what you need—morphological analysis doesn't require discourse annotations
+
+3. **Sparse features**: Features that apply to subsets of nodes (verb tense, proper noun flags) store efficiently
+
+4. **Pythonic workflow**: Simple text files work naturally with Python's data processing ecosystem
+
+5. **Reproducibility**: Each annotation layer can be versioned and cited independently

@@ -60,6 +60,12 @@ export interface NavItem {
   children?: NavItem[];
 }
 
+export interface NavSection {
+  title: string;
+  type: "manual" | "api";
+  items: NavItem[];
+}
+
 export interface DocsIndex {
   generated_at: string;
   packages: Record<string, DocModule>;

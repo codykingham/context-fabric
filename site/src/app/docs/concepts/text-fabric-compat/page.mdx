@@ -1,0 +1,181 @@
+# Text-Fabric Compatibility
+
+Text-Fabric taught the world how to model annotated text. Context-Fabric learned the lesson and optimized the implementation.
+
+## What Is Text-Fabric?
+
+[Text-Fabric](https://annotation.github.io/text-fabric/) is a Python library created by Dirk Roorda for working with annotated text corpora. It pioneered the graph-based approach to corpus linguistics that Context-Fabric builds upon.
+
+Text-Fabric introduced:
+- The slot/non-slot node distinction
+- Features as first-class annotations
+- The `F`, `L`, `T`, `S` API pattern
+- A powerful query language for pattern matching
+
+Text-Fabric powers significant digital humanities projects, including the Biblia Hebraica Stuttgartensia Amstelodamensis (BHSA) and numerous other ancient text corpora.
+
+## Context-Fabric: A Superior Implementation
+
+Context-Fabric is a fork of Text-Fabric that outperforms the original through better memory management and vectorization. It reads the same `.tf` source files but caches them using memory-mapped NumPy arrays instead of Python pickle files.
+
+| Aspect | Text-Fabric | Context-Fabric |
+|--------|-------------|----------------|
+| **Storage** | Python objects in memory | Memory-mapped NumPy arrays |
+| **Startup** | Load entire corpus into RAM (~7s for BHSA) | Map files on demand (~0.5s) |
+| **Memory** | ~6 GB for BHSA | ~500 MB for BHSA |
+| **Multi-corpus** | Linear memory scaling | Efficient memory sharing |
+| **MCP Server** | Not available | Native MCP server for AI assistants |
+
+<Callout type="info">
+Context-Fabric uses the same `.tf` source files as Text-Fabric. No conversion required—just a different, more efficient caching strategy.
+</Callout>
+
+### Performance Advantages
+
+Context-Fabric provides substantial performance improvements:
+
+- **65% average memory reduction** (ranging 20-92% depending on corpus)
+- **12× faster load times** for large corpora like BHSA
+- **26% faster lexical queries** through vectorized NumPy operations
+- **5× better multi-corpus scaling** for production deployments
+
+### MCP Server: Entirely New
+
+The MCP (Model Context Protocol) server is unique to Context-Fabric—it has no Text-Fabric equivalent. This enables AI assistants like Claude to query corpora directly, democratizing access to corpus linguistics for researchers without programming experience.
+
+## API Compatibility
+
+Context-Fabric preserves 100% API compatibility with Text-Fabric. If you know Text-Fabric, you know Context-Fabric.
+
+### The Core APIs
+
+| API | Purpose | Syntax |
+|-----|---------|--------|
+| `F` | Node features | `F.sp.v(node)` |
+| `E` | Edge features | `E.parent.f(node)` |
+| `L` | Locality (containment) | `L.d(node, otype='word')` |
+| `T` | Text representation | `T.text(node)` |
+| `S` | Search | `S.search(query)` |
+| `N` | Node iteration | `N.walk()` |
+
+### Search Query Syntax
+
+The query language is identical:
+
+```python
+# Find verbs in the qal stem
+query = '''
+word sp=verb vs=qal
+'''
+
+# Find clauses with specific phrase structure
+query = '''
+clause
+  phrase function=Pred
+    word sp=verb
+  phrase function=Subj
+    word sp=subs
+'''
+
+# Ordering constraints
+query = '''
+clause
+  word sp=verb
+  < word sp=subs
+'''
+```
+
+## Migration Path
+
+### Step 1: Install Context-Fabric
+
+```bash
+pip install context-fabric
+```
+
+### Step 2: Update Your Import
+
+If you use the `tf.app.use` pattern:
+
+```python
+# Before (Text-Fabric with auto-download)
+from tf.app import use
+A = use('bhsa', hoist=globals())
+
+# After (Context-Fabric)
+from cfabric import Fabric
+CF = Fabric('path/to/corpus')
+api = CF.loadAll()
+api.makeAvailableIn(globals())
+```
+
+If you use the `tf.fabric.Fabric` pattern directly:
+
+```python
+# Before (Text-Fabric)
+from tf.fabric import Fabric
+TF = Fabric(locations='path/to/corpus')
+api = TF.loadAll()
+
+# After (Context-Fabric—just change the import)
+from cfabric import Fabric
+CF = Fabric('path/to/corpus')
+api = CF.loadAll()
+```
+
+### Step 3: Adjust Corpus Paths
+
+Text-Fabric downloads corpora automatically. Context-Fabric requires you to specify the corpus path explicitly:
+
+```python
+# Context-Fabric corpus location
+CF = cfabric.Fabric('/path/to/bhsa-2021')
+```
+
+<Callout type="note">
+Context-Fabric reads the same `.tf` files as Text-Fabric. On first load, it compiles them into memory-mapped format (`.cfm` cache). Subsequent loads are near-instant.
+</Callout>
+
+### Step 4: Run Your Code
+
+Existing Text-Fabric code works unchanged:
+
+```python
+# This code works in both Text-Fabric and Context-Fabric
+for word in F.otype.s('word'):
+    if F.sp.v(word) == 'verb' and F.vs.v(word) == 'qal':
+        print(F.g_word_utf8.v(word), F.gloss.v(word))
+```
+
+## Implementation Differences
+
+### Memory Model
+
+Text-Fabric loads the entire corpus into Python objects. This is fast for iteration but memory-intensive.
+
+Context-Fabric memory-maps the corpus files using NumPy arrays. The operating system handles paging data in and out of memory as needed. Startup is near-instant. Memory usage stays bounded.
+
+### Performance Characteristics
+
+| Operation | Context-Fabric vs Text-Fabric |
+|-----------|-------------------------------|
+| Corpus loading | 12× faster |
+| Lexical queries | 26% faster |
+| Structural queries | Similar (6% slower) |
+| Memory usage | 65% less |
+
+For most workflows, the performance difference is imperceptible. The memory savings are substantial.
+
+### Error Messages
+
+Context-Fabric may produce different error messages for invalid queries or missing features. The semantics are the same; the wording differs.
+
+### Feature Names
+
+Feature names are preserved exactly from the source corpus. If BHSA has `sp` for part of speech, Context-Fabric has `sp`. No renaming occurs.
+
+## Acknowledgments
+
+Context-Fabric exists because Text-Fabric exists. The conceptual model, the API design, and the query language all originate from Dirk Roorda's foundational work. We build on that foundation with gratitude.
+
+The Hebrew Bible corpus (BHSA) used throughout this documentation is maintained by the Eep Talstra Centre for Bible and Computer at Vrije Universiteit Amsterdam.

@@ -1,0 +1,115 @@
+# LangChain Integration
+
+Use Context-Fabric with LangChain and LangGraph agents via the [langchain-mcp-adapters](https://github.com/langchain-ai/langchain-mcp-adapters) library.
+
+## Installation
+
+```bash
+pip install langchain-mcp-adapters langgraph
+```
+
+## Connecting to Context-Fabric
+
+Use `MultiServerMCPClient` to connect to the Context-Fabric MCP server:
+
+```python
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langgraph.prebuilt import create_react_agent
+from langchain_openai import ChatOpenAI
+
+async with MultiServerMCPClient({
+    "context-fabric": {
+        # Use full path for virtual environments:
+        # "command": "/path/to/venv/bin/cfabric-mcp",
+        "command": "cfabric-mcp",
+        "args": ["--corpus", "/path/to/bhsa"],
+        "transport": "stdio",
+    }
+}) as client:
+    tools = client.get_tools()
+
+    agent = create_react_agent(
+        ChatOpenAI(model="gpt-4"),
+        tools
+    )
+
+    result = await agent.ainvoke({
+        "messages": [("user", "Search for all nouns in Genesis 1:1")]
+    })
+```
+
+## Multiple Corpora
+
+Load multiple corpora in a single server:
+
+```python
+async with MultiServerMCPClient({
+    "context-fabric": {
+        "command": "cfabric-mcp",
+        "args": [
+            "--corpus", "/path/to/bhsa",
+            "--corpus", "/path/to/lxx",
+            "--default", "bhsa"
+        ],
+        "transport": "stdio",
+    }
+}) as client:
+    tools = client.get_tools()
+    agent = create_react_agent(ChatOpenAI(model="gpt-4"), tools)
+
+    # The agent can now query both corpora
+    result = await agent.ainvoke({
+        "messages": [("user", "Compare noun usage in Genesis 1 between Hebrew and Greek")]
+    })
+```
+
+## Available Tools
+
+Once connected, LangChain agents have access to all Context-Fabric MCP tools:
+
+| Tool | Purpose |
+|------|---------|
+| `list_corpora` | Show available corpora |
+| `describe_corpus` | Get corpus structure |
+| `list_features` | Browse features |
+| `describe_feature` | Get feature details |
+| `search` | Run queries |
+| `get_passages` | Retrieve text |
+
+## Example: Research Agent
+
+```python
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langgraph.prebuilt import create_react_agent
+from langchain_openai import ChatOpenAI
+
+async def research_query(question: str):
+    async with MultiServerMCPClient({
+        "context-fabric": {
+            "command": "cfabric-mcp",
+            "args": ["--corpus", "/path/to/bhsa"],
+            "transport": "stdio",
+        }
+    }) as client:
+        agent = create_react_agent(
+            ChatOpenAI(model="gpt-4"),
+            client.get_tools()
+        )
+
+        result = await agent.ainvoke({
+            "messages": [("user", question)]
+        })
+        return result
+
+# Run a research query
+result = await research_query(
+    "What verb tenses appear most frequently in Psalms? "
+    "Show the distribution."
+)
+```
+
+## Resources
+
+- [langchain-mcp-adapters GitHub](https://github.com/langchain-ai/langchain-mcp-adapters)
+- [LangChain MCP Documentation](https://python.langchain.com/docs/integrations/tools/mcp/)
+- [LangGraph Documentation](https://langchain-ai.github.io/langgraph/)

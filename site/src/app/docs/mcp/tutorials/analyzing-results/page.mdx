@@ -1,0 +1,258 @@
+# Analyzing Search Results
+
+Running a search is straightforward. The art lies in understanding what to do with the results—especially when you're dealing with thousands of matches. Context-Fabric provides four return types, each designed for different analytical needs.
+
+## The Return Types
+
+| Type | Purpose | Returns |
+|------|---------|---------|
+| `results` | Get actual matches | Node IDs with pagination cursor |
+| `count` | Check result size | Just the total count |
+| `statistics` | Analyze distributions | Feature value frequencies |
+| `passages` | Read the text | Formatted text by section |
+
+## Count First, Then Fetch
+
+Always start with `return_type="count"`. This tells you what you're dealing with before you commit to processing thousands of results.
+
+```python
+search(
+  template="""
+clause
+  phrase function=Pred
+    word sp=verb
+""",
+  return_type="count"
+)
+```
+
+Response:
+
+```json
+{
+  "count": 47832
+}
+```
+
+47,832 matches. That's a lot of clauses. Do you want to paginate through all of them, or refine your query first?
+
+<Callout type="tip">
+The count operation is fast—it doesn't need to assemble result objects. Use it liberally during query development to understand the impact of each constraint you add.
+</Callout>
+
+## Getting Results
+
+Once you're confident in your query, fetch actual results:
+
+```python
+search(
+  template="""
+word sp=verb vt=wayq
+""",
+  return_type="results",
+  limit=10
+)
+```
+
+Response:
+
+```json
+{
+  "total": 14972,
+  "results": [
+    {"word": 4, "section": ["Genesis", 1, 3]},
+    {"word": 12, "section": ["Genesis", 1, 4]},
+    {"word": 24, "section": ["Genesis", 1, 5]},
+    ...
+  ],
+  "cursor_id": "abc123def456",
+  "has_more": true
+}
+```
+
+Each result includes the node ID(s) for matched elements and the section reference. The cursor lets you get more.
+
+## Pagination with Cursors
+
+Large result sets are paginated. Use `search_continue` with the cursor ID:
+
+```python
+search_continue(
+  cursor_id="abc123def456",
+  limit=10
+)
+```
+
+This returns the next 10 results and a new cursor. Continue until `has_more` is false.
+
+<Callout type="warning">
+Cursors expire after 5 minutes. If you're processing results interactively, don't take too long between pages. For batch processing, consider getting all results in larger chunks.
+</Callout>
+
+You can also skip ahead:
+
+```python
+search_continue(
+  cursor_id="abc123def456",
+  offset=100,
+  limit=10
+)
+```
+
+This skips the first 100 results and returns 10 starting from position 100.
+
+## Statistical Analysis
+
+The statistics return type is where things get analytically interesting. Instead of individual results, you get aggregate counts across feature values.
+
+```python
+search(
+  template="""
+word sp=verb
+""",
+  return_type="statistics",
+  aggregate_features=["vs", "vt"]
+)
+```
+
+Response:
+
+```json
+{
+  "total": 50264,
+  "statistics": {
+    "vs": {
+      "qal": 28844,
+      "piel": 6070,
+      "hiphil": 8346,
+      "niphal": 4138,
+      "pual": 423,
+      "hophal": 395,
+      "hithpael": 824,
+      "...": "..."
+    },
+    "vt": {
+      "perf": 14986,
+      "impf": 14167,
+      "wayq": 14972,
+      "ptcp": 3015,
+      "infc": 1943,
+      "impv": 2062,
+      "infa": 119
+    }
+  }
+}
+```
+
+Instantly you can see: Qal is the dominant stem (57% of verbs). Perfect, imperfect, and wayyiqtol forms are roughly equal. Infinitive absolute is rare.
+
+This is corpus linguistics at scale—patterns that would take hours to compile manually, delivered in seconds.
+
+### Statistics by Section
+
+Add `group_by_section=True` to see how distributions vary across the corpus:
+
+```python
+search(
+  template="""
+word sp=verb vt=wayq
+""",
+  return_type="statistics",
+  aggregate_features=["vs"],
+  group_by_section=True
+)
+```
+
+Response:
+
+```json
+{
+  "total": 14972,
+  "by_section": {
+    "Genesis": {"qal": 1843, "hiphil": 412, "piel": 287, "...": "..."},
+    "Exodus": {"qal": 1456, "hiphil": 389, "piel": 312, "...": "..."},
+    "Leviticus": {"qal": 612, "hiphil": 189, "piel": 234, "...": "..."}
+  }
+}
+```
+
+Now you can see how verbal stem usage varies from book to book. Does narrative prose favor certain stems? Does poetry differ from law? The data is there.
+
+## Getting Passage Text
+
+Sometimes you need the actual text, not just node IDs. The `passages` return type groups results by section and includes the textual content:
+
+```python
+search(
+  template="""
+clause
+  phrase function=Pred
+    word lex=MLK/
+""",
+  return_type="passages",
+  limit=5
+)
+```
+
+Response:
+
+```json
+{
+  "passages": [
+    {
+      "section": ["Genesis", 36, 31],
+      "text": "וְאֵ֙לֶּה֙ הַמְּלָכִ֔ים אֲשֶׁ֥ר מָלְכ֖וּ בְּאֶ֣רֶץ אֱד֑וֹם",
+      "matches": [...]
+    },
+    {
+      "section": ["Genesis", 37, 8],
+      "text": "הֲמָלֹ֤ךְ תִּמְלֹךְ֙ עָלֵ֔ינוּ",
+      "matches": [...]
+    }
+  ]
+}
+```
+
+Passages mode is excellent for building concordances or when you need human-readable context.
+
+## Combining Approaches
+
+A typical analytical workflow combines multiple return types:
+
+```text
+1. COUNT: "How many clauses have consecutive verb forms?"
+   → 14,972 matches
+
+2. STATISTICS: "Which verbal stems appear in this construction?"
+   → Qal dominates, Hiphil is second, Piel is third
+
+3. STATISTICS + group_by_section: "Does this vary by book?"
+   → Poetry books show different patterns than narrative
+
+4. RESULTS: "Get specific examples from the Psalms"
+   → Paginate through Psalms matches for close reading
+
+5. PASSAGES: "Show me these verses in context"
+   → Full text for selected examples
+```
+
+Each step answers a different question. Count tells you scope. Statistics reveal patterns. Results give precision. Passages provide context.
+
+## Working with Node Features
+
+Sometimes you need additional information about matched nodes. Use `get_node_features` to retrieve specific features for a list of nodes:
+
+```python
+get_node_features(
+  nodes=[4, 12, 24, 38],
+  features=["lex", "gloss", "vs", "vt"]
+)
+```
+
+This returns the feature values for each node, letting you build custom analyses or export data for external tools.
+
+## Next Steps
+
+You've learned the discovery workflow, the query syntax, and result analysis. The final tutorial puts it all together with a deep dive into the BHSA corpus.
+
+[Continue to Working with BHSA →](/docs/tutorials/working-with-bhsa)

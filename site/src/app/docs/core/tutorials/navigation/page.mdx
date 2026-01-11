@@ -1,0 +1,183 @@
+# Navigation
+
+Corpus data is hierarchical. Words are contained in phrases. Phrases are contained in clauses. Clauses are contained in verses. The `L`, `T`, and `N` APIs let you navigate these relationships.
+
+## Locality (L API)
+
+The `L` API answers containment questions: what's inside this node? What contains this node? What comes next?
+
+### Down: `.d(node, otype)`
+
+Get nodes contained within a node:
+
+```python
+# Get all words in a verse
+words = L.d(verse_node, otype='word')
+
+# Get all clauses in a chapter
+clauses = L.d(chapter_node, otype='clause')
+
+# Get all phrases in a clause
+phrases = L.d(clause_node, otype='phrase')
+```
+
+### Up: `.u(node, otype)`
+
+Get containing nodes:
+
+```python
+# What verse contains this word?
+verses = L.u(word_node, otype='verse')
+verse = verses[0]  # Usually just one
+
+# What clause contains this phrase?
+clauses = L.u(phrase_node, otype='clause')
+```
+
+### Next/Previous: `.n()` and `.p()`
+
+Navigate to siblings:
+
+```python
+# Next verse
+next_verse = L.n(verse_node, otype='verse')
+
+# Previous word
+prev_word = L.p(word_node, otype='word')
+```
+
+### Example: Print a Verse
+
+```python
+# Get all words in Genesis 1:1
+verse = ...  # Node for Genesis 1:1
+words = L.d(verse, otype='word')
+
+for word in words:
+    print(T.text(word), end=' ')
+```
+
+## Text (T API)
+
+The `T` API retrieves the textual representation of nodes.
+
+### Getting Text: `.text(node)`
+
+```python
+# Text of a word
+T.text(word_node)  # Returns the Hebrew/Greek string
+
+# Text of a phrase (concatenates all words)
+T.text(phrase_node)
+
+# Text of a verse
+T.text(verse_node)
+```
+
+### Section Information
+
+For corpora with book/chapter/verse structure:
+
+```python
+# Get section reference for a node
+section = T.sectionFromNode(word_node)
+# Returns ('Genesis', 1, 1) for Genesis 1:1
+```
+
+### Text Formats
+
+Some corpora support multiple text representations:
+
+```python
+# Full Hebrew with vowels
+T.text(node, fmt='text-orig-full')
+
+# Consonantal text only
+T.text(node, fmt='text-orig-plain')
+```
+
+## Nodes (N API)
+
+The `N` API handles node ordering and enumeration.
+
+### Canonical Order
+
+All nodes have a canonical order based on their textual position:
+
+```python
+# Sort a list of nodes
+sorted_nodes = N.sortNodes(node_list)
+```
+
+### Walking Through Nodes
+
+```python
+# Iterate all nodes of a type
+for clause in F.otype.s('clause'):
+    # Process each clause
+    pass
+```
+
+## Example: Clause Boundaries
+
+Find where each clause starts and ends:
+
+```python
+for clause in F.otype.s('clause'):
+    words = L.d(clause, otype='word')
+    if words:
+        first_word = words[0]
+        last_word = words[-1]
+        section = T.sectionFromNode(first_word)
+        print(f"Clause at {section}: {len(words)} words")
+```
+
+## Example: Navigate Book Structure
+
+```python
+# Get all chapters in Genesis
+genesis = ...  # Node for Genesis book
+chapters = L.d(genesis, otype='chapter')
+
+for chapter in chapters:
+    verses = L.d(chapter, otype='verse')
+    print(f"Chapter has {len(verses)} verses")
+```
+
+## Example: Context Around a Match
+
+```python
+def show_context(word_node, window=3):
+    """Show words before and after a match."""
+    current = word_node
+    before = []
+    after = []
+
+    # Get preceding words
+    for _ in range(window):
+        prev = L.p(current, otype='word')
+        if prev:
+            before.insert(0, T.text(prev[0]))
+            current = prev[0]
+        else:
+            break
+
+    current = word_node
+    # Get following words
+    for _ in range(window):
+        next_w = L.n(current, otype='word')
+        if next_w:
+            after.append(T.text(next_w[0]))
+            current = next_w[0]
+        else:
+            break
+
+    context = before + ['**' + T.text(word_node) + '**'] + after
+    return ' '.join(context)
+```
+
+## Next Steps
+
+Now that you can navigate the corpus, learn to search for patterns:
+
+[Continue to Search Patterns](/docs/core/tutorials/search-patterns)

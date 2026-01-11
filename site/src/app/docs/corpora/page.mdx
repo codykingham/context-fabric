@@ -1,0 +1,28 @@
+# Available Corpora
+
+Context-Fabric works with any corpus in Text-Fabric format. This page catalogs 40+ known corpora across languages and time periods.
+
+<CorporaTable />
+
+## Using a Corpus
+
+To use any corpus with Context-Fabric:
+
+1. Clone the repository or download the corpus
+2. Point Context-Fabric to the directory containing `.tf` files
+
+```python
+from cfabric import Fabric
+
+CF = Fabric('/path/to/corpus')
+api = CF.loadAll()
+api.makeAvailableIn(globals())
+```
+
+On first load, Context-Fabric compiles the corpus to its memory-mapped format (`.cfm` files) for faster subsequent loads.
+
+## Resources
+
+- [Creating Your Own Corpus](/docs/corpora/creating) — Build a corpus from your data
+- [Text-Fabric Corpus Documentation](https://annotation.github.io/text-fabric/tf/about/corpora.html)
+- [GitHub text-fabric topic](https://github.com/topics/text-fabric) — Discover community corpora

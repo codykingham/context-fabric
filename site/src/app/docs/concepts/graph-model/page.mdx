@@ -1,0 +1,172 @@
+# Graph Data Model
+
+Context-Fabric represents annotated text as a directed graph. Every word, phrase, clause, sentence, and document becomes a node. Features annotate these nodes with properties. Edges encode containment, sequence, and relationships.
+
+This model applies to any structured corpus—biblical texts, classical literature, legal documents, linguistic corpora, or any text with layered annotations.
+
+## Slot Nodes: The Atomic Units
+
+**Slot nodes** are the minimal units of the corpus. In most corpora these are words, but they could be morphemes, characters, or any atomic unit the annotation scheme defines. Slots form a strict linear sequence, numbered from 1 to N.
+
+<img src="/docs/images/slot-sequence.svg" alt="Slot nodes in sequence" style={{maxWidth: '100%', margin: '1.5rem 0'}} />
+
+Slot nodes define **textual order**. Every other node in the corpus derives its position from the slots it contains. A sentence containing slots 100-150 comes before a sentence containing slots 200-250.
+
+<Callout type="info">
+Slot nodes are the only nodes that carry the actual text. All other nodes are containers that derive their text from the slots they encompass.
+</Callout>
+
+## Non-Slot Nodes: Containing Structures
+
+**Non-slot nodes** represent structures built on top of slots: phrases, clauses, sentences, paragraphs, sections, chapters, documents, and corpus-specific structures.
+
+These nodes form overlapping hierarchies. A chapter contains sentences. A sentence contains clauses. A clause contains phrases. A phrase contains words. The same word might belong to multiple overlapping structures in different annotation layers.
+
+<img src="/docs/images/containment-hierarchy.svg" alt="Containment hierarchy" style={{maxWidth: '100%', margin: '1.5rem 0'}} />
+
+Non-slot nodes receive IDs that continue the numbering after the last slot, grouped by type. If a corpus has 100,000 word slots, the first non-slot type might occupy nodes 100,001–150,000, the next type 150,001–300,000, and so on. Each node type has its own contiguous block of IDs.
+
+### Spanning Slots
+
+Each non-slot node spans a range of slots. A phrase might span slots 1-3, while the clause containing it spans slots 1-7. This span-based representation enables efficient containment queries.
+
+<img src="/docs/images/spanning-nodes.svg" alt="Non-slot nodes spanning slots" style={{maxWidth: '100%', margin: '1.5rem 0'}} />
+
+## Node Types
+
+Every corpus defines its own set of node types based on its annotation scheme. Use `describe_corpus()` to see what's available:
+
+```python
+describe_corpus()
+# Returns node types like: word, phrase, clause, sentence, paragraph, section, etc.
+```
+
+<Callout type="note">
+**Example: BHSA (Hebrew Bible)**
+
+The BHSA corpus defines types including: `word` (426K slots), `phrase`, `clause`, `sentence`, `verse`, `chapter`, `book`, plus linguistic structures like `subphrase`, `clause_atom`, and `half_verse`.
+
+**Example: Literary Corpus**
+
+A novel corpus might define: `word` (slots), `sentence`, `paragraph`, `chapter`, `book`.
+</Callout>
+
+## Features: Annotations on Nodes
+
+**Features** are named attributes attached to nodes. They encode whatever the corpus annotates: part of speech, grammatical properties, semantic tags, metadata, and more.
+
+<img src="/docs/images/node-features.svg" alt="Features attached to a node" style={{maxWidth: '100%', margin: '1.5rem 0'}} />
+
+### Node Features
+
+Attributes of individual nodes. Accessed via the `F` API:
+
+```python
+# Get a feature value for a node
+value = F.feature_name.v(node)
+
+# Find all nodes with a specific feature value
+nodes = F.feature_name.s(value)
+```
+
+Common feature types across corpora:
+- **Lexical**: lemma, surface form, normalized form
+- **Grammatical**: part of speech, tense, number, gender, case
+- **Semantic**: gloss, domain, named entity type
+- **Structural**: function, relation, type
+
+### Edge Features
+
+Attributes of relationships between nodes. Accessed via the `E` API:
+
+```python
+# Get related nodes via an edge
+related = E.edge_name.f(node)
+```
+
+<Callout type="tip">
+The API prefixes: `F` for node features, `E` for edge features, `L` for locality (containment), `T` for text, `S` for search.
+</Callout>
+
+## Containment and the L API
+
+The **locality API** (`L`) answers questions about containment and adjacency:
+
+<img src="/docs/images/locality-api.svg" alt="Locality API navigation" style={{maxWidth: '100%', margin: '1.5rem 0'}} />
+
+```python
+# What words are in this sentence?
+words = L.d(sentence_node, otype="word")
+
+# What sentence contains this word?
+sentence = L.u(word_node, otype="sentence")[0]
+
+# What is the next sentence?
+next_sent = L.n(sentence_node, otype="sentence")[0]
+
+# What is the previous word?
+prev_word = L.p(word_node, otype="word")[0]
+```
+
+The locality relationships:
+- `L.d(node, otype)` — **d**own: descendants of a given type
+- `L.u(node, otype)` — **u**p: ancestors of a given type
+- `L.n(node, otype)` — **n**ext: following sibling of a given type
+- `L.p(node, otype)` — **p**revious: preceding sibling of a given type
+
+## Sequence and Ordering
+
+All nodes have a natural ordering derived from the slots they contain:
+
+1. **Slot position**: A node's position is defined by its first slot (ties broken by last slot)
+2. **Containment ordering**: A sentence containing slots 1-50 precedes one containing slots 51-100
+3. **Strict sequencing**: Search results return in textual order by default
+
+This ordering enables iteration through the corpus in reading order regardless of which node type you traverse.
+
+## Why This Model Matters
+
+The graph model enables queries that would be awkward or impossible in flat text:
+
+**Structural patterns:**
+```
+sentence
+  clause
+    phrase function=subject
+    phrase function=predicate
+```
+
+**Ordering constraints:**
+```
+clause
+  phrase function=predicate
+  < phrase function=subject    # subject AFTER predicate
+```
+
+**Feature combinations:**
+```
+word pos=verb tense=past
+```
+
+**Quantification:**
+```
+sentence
+  clause
+  clause
+  clause    # sentences with 3+ clauses
+```
+
+The graph model makes linguistic structure first-class. It is not reconstructed on the fly from markup or inferred from whitespace. It is the data.
+
+## Implementation
+
+Under the hood, Context-Fabric stores the graph as memory-mapped arrays:
+
+- **Slot positions**: Two arrays (start/end) per non-slot node type
+- **Features**: One array per feature, indexed by node ID
+- **Edges**: Adjacency arrays with optional edge values
+
+This representation enables:
+- Constant-time feature lookup
+- Efficient range queries for containment
+- Memory-mapped access for corpora larger than RAM

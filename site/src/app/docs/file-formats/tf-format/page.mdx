@@ -1,0 +1,440 @@
+# TF Format
+
+Text-Fabric (TF) is a plain-text format for storing annotated corpora. Each `.tf` file contains one feature—either node values, edge relationships, or configuration.
+
+## File Structure
+
+Every TF file has the same basic structure:
+
+```
+@header
+@metadata=value
+@metadata=value
+
+data lines...
+```
+
+1. **Header line**: Declares the file type (`@node`, `@edge`, or `@config`)
+2. **Metadata lines**: Key-value pairs starting with `@`
+3. **Blank line**: Separates metadata from data
+4. **Data lines**: Tab-separated values (format depends on file type)
+
+## Node Numbering
+
+Node numbers are **implicit by default**. Each line assigns a value to the next node in sequence, starting from node 1. You only need explicit node numbers when there's a discontinuity.
+
+### Implicit Numbering
+
+```tf
+@node
+@valueType=str
+
+hello       # Node 1
+beautiful   # Node 2
+world       # Node 3
+good        # Node 4
+morning     # Node 5
+```
+
+### Explicit Start Position
+
+Use an explicit node number to jump to a new starting position:
+
+```tf
+@node
+@valueType=str
+
+651573	Time    # Jump to node 651573
+Pred            # Node 651574 (continues implicitly)
+Subj            # Node 651575
+Objc            # Node 651576
+```
+
+This is how sparse features work—they start at the first relevant node and continue from there.
+
+### Range Notation
+
+Assign the same value to many contiguous nodes efficiently:
+
+```tf
+@node
+@valueType=str
+
+1-426590	word        # Nodes 1 through 426,590
+426591-426629	book    # Nodes 426,591 through 426,629
+426630-427558	chapter # Nodes 426,630 through 427,558
+```
+
+This is commonly used in `otype.tf` where each node type occupies a contiguous range.
+
+### Gaps for Sparse Features
+
+To skip nodes entirely, use explicit node numbers:
+
+```tf
+@node
+@valueType=str
+
+1	noun
+3	verb
+5	adjective
+```
+
+Nodes 2 and 4 have no value for this feature.
+
+## Node Features
+
+Node features assign values to individual nodes. Use `@node` header.
+
+### String Values
+
+```tf
+@node
+@valueType=str
+@description=word text
+
+hello
+beautiful
+world
+good
+morning
+```
+
+### Integer Values
+
+```tf
+@node
+@valueType=int
+@description=word frequency
+
+42
+100
+7
+15
+3
+```
+
+## Edge Features
+
+Edge features define relationships between nodes. Use `@edge` header.
+
+### Edges Without Values
+
+```tf
+@edge
+@description=parent relationship
+
+1	6
+2	6
+3	6
+4	7
+5	7
+6	8
+7	8
+```
+
+Each line defines an edge: `source<tab>target`. This example shows:
+- Words 1, 2, 3 have parent phrase 6
+- Words 4, 5 have parent phrase 7
+- Phrases 6, 7 have parent sentence 8
+
+### Edges With Values
+
+Add `@edgeValues` to store values on edges:
+
+```tf
+@edge
+@edgeValues
+@valueType=int
+@description=distance between nodes
+
+1	2	0
+1	3	5
+2	3
+3	4	0
+```
+
+Format: `source<tab>target<tab>value`. An empty value field means no value (distinct from 0).
+
+### Slot Containment (oslots)
+
+The special `oslots` feature maps non-slot nodes to their constituent slots:
+
+```tf
+@edge
+@valueType=int
+@description=slot containment
+
+6	1-3
+7	4-5
+8	1-5
+```
+
+This defines:
+- Phrase 6 contains slots 1, 2, 3
+- Phrase 7 contains slots 4, 5
+- Sentence 8 contains slots 1 through 5
+
+## Configuration Features
+
+Configuration files use `@config` header and contain only metadata (no data section):
+
+```tf
+@config
+@fmt:text-orig-full={word}
+@sectionFeatures=book,chapter,verse
+@sectionTypes=book,chapter,verse
+@structureFeatures=
+@structureTypes=
+```
+
+### Text Format Templates
+
+The `@fmt:` prefix defines text rendering templates:
+
+```tf
+@fmt:text-orig-full={word}{trailer}
+@fmt:text-plain={word}
+@fmt:lex-orig={lex}
+```
+
+Templates use `{feature}` placeholders that get replaced with feature values.
+
+### Section Configuration
+
+```tf
+@sectionFeatures=book,chapter,verse
+@sectionTypes=book,chapter,verse
+```
+
+Defines the hierarchical section structure for navigation (e.g., Genesis 1:1).
+
+## The WARP Features
+
+Three features are required in every corpus:
+
+### otype.tf
+
+Maps each node to its type. Real corpora use range notation for efficiency:
+
+```tf
+@node
+@valueType=str
+
+1-426590	word
+426591-426629	book
+426630-427558	chapter
+427559-515689	clause
+651573-904775	phrase
+1172308-1236024	sentence
+```
+
+The first node type encountered becomes the **slot type** (the atomic text units). All other types are non-slot nodes that span slots.
+
+For a minimal example with 5 words, 2 phrases, and 1 sentence:
+
+```tf
+@node
+@valueType=str
+
+1-5	word
+6-7	phrase
+8	sentence
+```
+
+### oslots.tf
+
+Maps non-slot nodes to their slots:
+
+```tf
+@edge
+@valueType=int
+@description=slot containment
+
+6	1-3
+7	4-5
+8	1-5
+```
+
+This edge feature is required for the graph structure to work.
+
+### otext.tf
+
+Configuration file that defines text rendering formats and section structure. Unlike other TF files, otext has no data section—only metadata.
+
+#### Text Format Templates
+
+The `@fmt:` prefix defines named text formats used by `T.text()`:
+
+```tf
+@fmt:text-orig-full={g_word_utf8}{trailer_utf8}
+@fmt:text-trans-plain={g_cons}{trailer}
+@fmt:lex-default={voc_lex_utf8}
+```
+
+**Template syntax:**
+- `{feature}` — Insert the value of that feature for each slot
+- `{feat1/feat2}` — Use feat1 if present, otherwise fall back to feat2
+
+**Example from BHSA:**
+
+```tf
+@fmt:text-orig-full={qere_utf8/g_word_utf8}{qere_trailer_utf8/trailer_utf8}
+```
+
+This format uses the Qere reading if available, falling back to the Ketiv.
+
+**Using formats in code:**
+
+```python
+# Default format (first @fmt: defined, or text-orig-full)
+T.text(node)
+
+# Specific format
+T.text(node, fmt='text-trans-plain')
+T.text(node, fmt='lex-default')
+```
+
+#### Section Configuration
+
+Two fields define the corpus's hierarchical section structure:
+
+```tf
+@sectionFeatures=book,chapter,verse
+@sectionTypes=book,chapter,verse
+```
+
+- **@sectionTypes** — Node types that represent sections (up to 3 levels)
+- **@sectionFeatures** — Features that provide the section labels for each type
+
+**How it works:**
+
+| Section Type | Section Feature | Example Value |
+|-------------|-----------------|---------------|
+| book | book | "Genesis" |
+| chapter | chapter | 1 |
+| verse | verse | 1 |
+
+This enables section-based navigation:
+
+```python
+# Get section reference for a node
+T.sectionFromNode(node)  # Returns ('Genesis', 1, 1)
+
+# Find node from section reference
+T.nodeFromSection(('Genesis', 1, 1))
+
+# Get passage text
+T.text(T.nodeFromSection(('Genesis', 1)))  # Chapter 1 text
+```
+
+#### Complete Example
+
+A real-world otext from BHSA:
+
+```tf
+@config
+@fmt:text-orig-full={qere_utf8/g_word_utf8}{qere_trailer_utf8/trailer_utf8}
+@fmt:text-orig-plain={g_cons_utf8}{trailer_utf8}
+@fmt:text-trans-full={qere/g_word}{qere_trailer/trailer}
+@fmt:lex-orig-full={g_lex_utf8}
+@fmt:lex-default={voc_lex_utf8}
+@sectionFeatures=book,chapter,verse
+@sectionTypes=book,chapter,verse
+```
+
+## Metadata Fields
+
+### Required
+
+| Field | Applies To | Description |
+|-------|-----------|-------------|
+| `@node` / `@edge` / `@config` | All files | **First line** declaring file type |
+| `@valueType=str` or `@valueType=int` | Node & Edge | Data type (defaults to `str` if omitted, but should be specified) |
+
+### Conditional
+
+| Field | Applies To | Description |
+|-------|-----------|-------------|
+| `@edgeValues` | Edge only | Flag indicating edges carry values (not just relationships) |
+
+### Optional
+
+| Field | Description |
+|-------|-------------|
+| `@description=...` | Human-readable description of the feature |
+| `@writtenBy=...` | Tool or person that created the file |
+| `@dateWritten=...` | ISO timestamp of creation |
+
+You can add any custom metadata fields—they are preserved but not interpreted by Context-Fabric.
+
+## String Escaping
+
+Special characters in string values use backslash escaping:
+
+| Sequence | Character |
+|----------|-----------|
+| `\\` | Backslash |
+| `\t` | Tab |
+| `\n` | Newline |
+
+## Example Corpus
+
+A minimal corpus with two phrases in one sentence:
+
+**otype.tf**
+```tf
+@node
+@valueType=str
+
+1-5	word
+6-7	phrase
+8	sentence
+```
+
+**oslots.tf**
+```tf
+@edge
+
+6	1-3
+7	4-5
+8	1-5
+```
+
+**word.tf**
+```tf
+@node
+@valueType=str
+
+hello
+beautiful
+world
+good
+morning
+```
+
+**pos.tf**
+```tf
+@node
+@valueType=str
+
+interjection
+adjective
+noun
+adjective
+noun
+```
+
+**otext.tf**
+```tf
+@config
+@fmt:text-orig-full={word}
+@sectionFeatures=
+@sectionTypes=
+```
+
+This creates a corpus where:
+- Nodes 1-5 are words (slots)
+- Node 6 is a phrase containing "hello beautiful world"
+- Node 7 is a phrase containing "good morning"
+- Node 8 is a sentence containing all five words

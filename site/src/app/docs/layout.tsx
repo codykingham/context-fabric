@@ -1,6 +1,6 @@
 import { Header } from "@/components/layout";
-import { Sidebar } from "@/components/docs";
-import { navigation } from "@/lib/docs";
+import { Sidebar, ScrollToTop } from "@/components/docs";
+import { fullNavigation } from "@/lib/docs";
 
 export default function DocsLayout({
   children,
@@ -10,10 +10,11 @@ export default function DocsLayout({
   return (
     <>
       <Header />
+      <ScrollToTop />
       <div className="flex min-h-screen pt-16">
-        <Sidebar navigation={navigation} />
+        <Sidebar navigation={fullNavigation} />
         <main className="flex-1 p-8 overflow-auto bg-[var(--color-bg)]">
-          {children}
+          <div className="max-w-4xl">{children}</div>
         </main>
       </div>
     </>

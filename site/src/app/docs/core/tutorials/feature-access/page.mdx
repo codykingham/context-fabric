@@ -1,0 +1,152 @@
+# Feature Access
+
+Features are the annotations on nodes. Part of speech, lexeme, gender, number, syntactic function—everything linguistically interesting is stored as a feature. This tutorial covers the `F` and `E` APIs.
+
+<Callout type="warning">
+**Features vary by corpus.** The features shown here (like `sp`, `lex`, `vs`) are from BHSA. Other corpora have different features. Always use [Corpus Discovery](/docs/core/tutorials/corpus-discovery) to explore what's available in your corpus before querying.
+</Callout>
+
+## Node Features (F API)
+
+The `F` API accesses features attached to nodes. Each feature is accessed by name:
+
+```python
+# Get the part of speech feature
+sp = F.sp
+
+# Get a value for a specific node
+pos = F.sp.v(123)  # Returns 'verb', 'subs', etc.
+```
+
+### Getting Values: `.v(node)`
+
+```python
+# Part of speech of word 1
+F.sp.v(1)  # 'prep'
+
+# Lexeme of word 5
+F.lex.v(5)  # 'BR>'
+
+# Gender of word 10
+F.gn.v(10)  # 'm' or 'f' or 'NA'
+```
+
+### Finding Nodes by Value: `.s(value)`
+
+Find all nodes with a specific feature value:
+
+```python
+# All verbs
+verbs = F.sp.s('verb')
+print(f"Found {len(verbs)} verbs")
+
+# All words with lexeme 'BR>'
+br_words = F.lex.s('BR>')
+```
+
+The result is a tuple of node IDs in canonical order.
+
+### Iterating All Values: `.items()`
+
+Iterate through all (node, value) pairs:
+
+```python
+# Print all unique parts of speech
+for node, pos in F.sp.items():
+    print(f"Node {node}: {pos}")
+```
+
+### Feature Metadata
+
+Access feature documentation:
+
+```python
+print(F.sp.meta)  # Metadata about the feature
+```
+
+## Example: BHSA Word Features
+
+These features are specific to BHSA (Hebrew Bible). Use `list_features(api, node_types=["word"])` to discover features in other corpora.
+
+| Feature | Description | Values |
+|---------|-------------|--------|
+| `sp` | Part of speech | verb, subs, prep, art, conj, ... |
+| `lex` | Lexeme (dictionary form) | Hebrew consonants |
+| `gn` | Grammatical gender | m, f, NA |
+| `nu` | Grammatical number | sg, pl, du, NA |
+| `ps` | Person | p1, p2, p3, NA |
+| `vs` | Verbal stem | qal, piel, hiphil, niphal, ... |
+| `vt` | Verbal tense | perf, impf, wayq, ptca, infc, ... |
+| `st` | State | c (construct), a (absolute) |
+
+For complete BHSA feature documentation, see the [ETCBC Feature Guide](https://etcbc.github.io/bhsa/features/0_home/).
+
+## Edge Features (E API)
+
+Edge features represent relationships between nodes. Access them via the `E` API:
+
+```python
+# Get nodes related to node 123
+related = E.mother.f(123)
+```
+
+### Forward Edges: `.f(node)`
+
+Get target nodes from a source:
+
+```python
+# Get the mother (embedding parent) of a clause
+mothers = E.mother.f(clause_node)
+```
+
+### Reverse Edges: `.t(node)`
+
+Get source nodes pointing to a target:
+
+```python
+# Get nodes that point to this node
+sources = E.mother.t(clause_node)
+```
+
+## Checking Feature Existence
+
+```python
+# Check if a feature value exists
+if F.sp.v(node) == 'verb':
+    print("It's a verb")
+
+# Handle missing values
+pos = F.sp.v(node)
+if pos is None:
+    print("No part of speech for this node type")
+```
+
+## Example: Finding Rare Lexemes
+
+```python
+# Find words with low-frequency lexemes
+rare_words = []
+for node, freq in F.freq_lex.items():
+    if freq < 10:
+        rare_words.append(node)
+
+print(f"Found {len(rare_words)} rare words")
+```
+
+## Example: Gender Agreement Check
+
+```python
+# Find all masculine plural nouns
+masc_pl_nouns = []
+for word in F.sp.s('subs'):
+    if F.gn.v(word) == 'm' and F.nu.v(word) == 'pl':
+        masc_pl_nouns.append(word)
+
+print(f"Found {len(masc_pl_nouns)} masculine plural nouns")
+```
+
+## Next Steps
+
+Now that you can access features, learn to navigate the corpus structure:
+
+[Continue to Navigation](/docs/core/tutorials/navigation)

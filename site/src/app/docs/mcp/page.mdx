@@ -1,0 +1,54 @@
+# MCP Server
+
+The Context-Fabric MCP (Model Context Protocol) server enables AI assistants like Claude to query corpora directly. This is functionality unique to Context-Fabric—it has no Text-Fabric equivalent.
+
+## What is MCP?
+
+The Model Context Protocol is an open standard for connecting AI assistants to external tools and data sources. Context-Fabric's MCP server exposes corpus operations as tools that AI assistants can invoke.
+
+## Why Use the MCP Server?
+
+- **Natural language queries**: Ask questions in plain English instead of writing code
+- **Iterative exploration**: Refine queries conversationally based on results
+- **No programming required**: Researchers can access corpus data without Python knowledge
+- **AI-assisted analysis**: Let Claude help interpret patterns and suggest follow-up queries
+
+## Getting Started
+
+1. **Install**: `pip install context-fabric[mcp]`
+2. **Configure**: Add to your Claude Desktop configuration
+3. **Query**: Start asking questions about your corpus
+
+See [Server Setup](/docs/mcp/guides/server-setup) for detailed installation instructions.
+
+## Available Tools
+
+The MCP server provides 10 tools organized into three categories:
+
+### Discovery Tools
+- `list_corpora` - List loaded corpora
+- `describe_corpus` - Corpus structure overview
+- `list_features` - Browse available features
+- `describe_feature` - Feature details with sample values
+- `get_text_formats` - Text encoding samples
+
+### Search Tools
+- `search` - Pattern-based search with multiple output modes
+- `search_continue` - Paginate through results
+- `search_syntax_guide` - Query syntax documentation
+
+### Data Access Tools
+- `get_passages` - Retrieve text by section reference
+- `get_node_features` - Batch feature lookup
+
+## Tutorials
+
+- [Corpus Discovery](/docs/mcp/tutorials/corpus-discovery) - Learn the exploration workflow
+- [Building Queries](/docs/mcp/tutorials/building-queries) - Master search syntax
+- [Analyzing Results](/docs/mcp/tutorials/analyzing-results) - Work with search results
+
+## Guides
+
+- [Server Setup](/docs/mcp/guides/server-setup) - Installation and configuration
+- [Claude Integration](/docs/mcp/guides/claude-integration) - Usage patterns with Claude
+- [AI Workflows](/docs/mcp/guides/ai-workflows) - Best practices for AI-assisted research

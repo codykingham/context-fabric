@@ -1,0 +1,200 @@
+# Section References
+
+Section references are the canonical addressing scheme for navigating corpora—book, chapter, verse for biblical texts, or equivalent hierarchies for other corpora.
+
+## The Section Hierarchy
+
+Most textual corpora have a natural sectioning structure:
+
+- **Biblical texts**: Book, Chapter, Verse
+- **Classical texts**: Work, Book, Section
+- **Legal texts**: Title, Chapter, Section
+
+Context-Fabric encodes this hierarchy in the corpus metadata and provides tools to navigate it fluently.
+
+```python
+# Get the sectioning levels for this corpus
+describe_corpus()
+# Returns: {"sections": {"levels": ["book", "chapter", "verse"]}}
+```
+
+## Reference Format
+
+Section references are arrays specifying coordinates at each level:
+
+```python
+# Single verse reference
+["Genesis", 1, 1]
+
+# Just a book
+["Genesis"]
+
+# Book and chapter
+["Genesis", 1]
+
+# Full verse reference
+["Exodus", 20, 13]
+```
+
+The format is always `[book_name, chapter_number, verse_number]` where later elements can be omitted for less specific references.
+
+## Using get_passages
+
+The `get_passages` tool retrieves text for one or more section references:
+
+```python
+# Get a single verse
+get_passages(sections=[["Genesis", 1, 1]])
+
+# Get multiple passages at once
+get_passages(sections=[
+    ["Genesis", 1, 1],
+    ["Genesis", 1, 2],
+    ["Exodus", 20, 1]
+])
+```
+
+<Callout type="tip">
+Batch your passage requests. Fetching 50 verses in one call is much more efficient than 50 separate calls.
+</Callout>
+
+### Response Format
+
+Each passage returns with its text and structural information:
+
+```json
+{
+  "section": ["Genesis", 1, 1],
+  "text": "בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים אֵ֥ת הַשָּׁמַ֖יִם וְאֵ֥ת הָאָֽרֶץ׃",
+  "nodes": {
+    "verse": 1414345,
+    "words": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+  }
+}
+```
+
+## Language Support
+
+Book names can be specified in multiple languages. Use the `lang` parameter:
+
+```python
+# English (default)
+get_passages(sections=[["Genesis", 1, 1]], lang="en")
+
+# Hebrew
+get_passages(sections=[["בראשית", 1, 1]], lang="he")
+
+# German
+get_passages(sections=[["1. Mose", 1, 1]], lang="de")
+
+# Latin
+get_passages(sections=[["Genesis", 1, 1]], lang="la")
+```
+
+### Available Language Codes
+
+| Code | Language | Example |
+|------|----------|---------|
+| `en` | English | Genesis, Exodus, Leviticus |
+| `he` | Hebrew | בראשית, שמות, ויקרא |
+| `de` | German | 1. Mose, 2. Mose, 3. Mose |
+| `la` | Latin | Genesis, Exodus, Leviticus |
+
+<Callout type="note">
+Language support depends on the corpus metadata. Not all corpora have translations for all book names. English is the most reliable fallback.
+</Callout>
+
+## Section References in Search
+
+Section references also appear in search results. When you search for patterns, results include their section coordinates:
+
+```python
+search(
+    template="word lex=BR>[",
+    return_type="passages"
+)
+
+# Results grouped by section:
+# Genesis 1:1 - "בָּרָא" (created)
+# Genesis 1:21 - "וַיִּבְרָא" (and he created)
+# ...
+```
+
+## Working with Section Nodes
+
+Sections are also nodes in the graph. You can traverse them:
+
+```python
+# Get all verses in a chapter
+chapter_node = ...  # node ID for Genesis 1
+verses = L.d(chapter_node, otype="verse")
+
+# Get the book containing a verse
+verse_node = ...  # node ID for Genesis 1:1
+book = L.u(verse_node, otype="book")[0]
+book_name = T.sectionFromNode(book)[0]  # "Genesis"
+```
+
+## Examples Across Corpora
+
+### Hebrew Bible (BHSA)
+
+```python
+get_passages(sections=[
+    ["Genesis", 1, 1],      # Creation
+    ["Exodus", 20, 2],      # Ten Commandments
+    ["Psalms", 23, 1],      # The Lord is my shepherd
+    ["Isaiah", 40, 1],      # Comfort ye
+])
+```
+
+### With Chapter-Level References
+
+```python
+# Get an entire chapter
+get_passages(sections=[["Genesis", 1]])
+
+# Get multiple chapters
+get_passages(sections=[
+    ["Genesis", 1],
+    ["Genesis", 2],
+    ["Genesis", 3]
+])
+```
+
+<Callout type="warning">
+Chapter-level references can return large amounts of text. Consider using `limit` parameter for very long chapters.
+</Callout>
+
+## Coordinate Validation
+
+Invalid section references return clear errors:
+
+```python
+# Non-existent book
+get_passages(sections=[["Hezekiah", 1, 1]])
+# Error: Book "Hezekiah" not found
+
+# Invalid chapter
+get_passages(sections=[["Genesis", 100, 1]])
+# Error: Chapter 100 not found in Genesis (max: 50)
+
+# Invalid verse
+get_passages(sections=[["Genesis", 1, 100]])
+# Error: Verse 100 not found in Genesis 1 (max: 31)
+```
+
+## Integration with MCP
+
+When using Context-Fabric through the MCP server with AI assistants, section references work the same way:
+
+```
+Human: Show me Genesis 1:1-3 in Hebrew
+
+AI: [calls get_passages with sections=[["Genesis", 1, 1], ["Genesis", 1, 2], ["Genesis", 1, 3]]]
+
+בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים אֵ֥ת הַשָּׁמַ֖יִם וְאֵ֥ת הָאָֽרֶץ׃
+וְהָאָ֗רֶץ הָיְתָ֥ה תֹ֙הוּ֙ וָבֹ֔הוּ...
+```
+
+The canonical addressing scheme that scholars have used for centuries becomes the API that AI assistants use to retrieve text. Continuity through abstraction.

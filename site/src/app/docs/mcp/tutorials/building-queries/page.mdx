@@ -1,0 +1,198 @@
+# Building Search Queries
+
+The search template syntax is where linguistic intuition meets computational precision. Indentation mirrors syntactic hierarchy. Relations express word order. Feature constraints filter to exactly what you're looking for.
+
+## Basic Patterns
+
+The simplest query is just a node type:
+
+```text
+word
+```
+
+This matches every word in the corpus—426,584 matches in BHSA. Not useful on its own, but a starting point.
+
+Add a feature constraint:
+
+```text
+word sp=verb
+```
+
+Now you're matching only words where the part of speech is "verb." In BHSA, that's 50,264 matches.
+
+Multiple constraints narrow further:
+
+```text
+word sp=verb vs=qal
+```
+
+This matches verbs in the Qal stem (the most basic Hebrew verbal stem). Constraints on the same line are combined with AND logic.
+
+## Regex Matching
+
+For flexible text matching, use the `~` operator with a regular expression:
+
+```text
+word lex~MLK.*
+```
+
+This matches any word whose lexeme starts with MLK (the root for "king" in Hebrew). The `.*` matches any characters after.
+
+Common regex patterns:
+
+```text
+word lex~^>MR            # Lexemes starting with >MR
+word lex~.*H$            # Lexemes ending with H
+word lex~BR.|.RB         # Lexemes containing BR or RB
+```
+
+<Callout type="tip">
+Regex matching uses the text encoding from your corpus. Run `get_text_formats()` first to see what characters to use. In BHSA, Hebrew is typically transliterated: aleph becomes `>`, bet becomes `B`, etc.
+</Callout>
+
+## Containment (Indentation)
+
+Linguistic structures are hierarchical. A clause contains phrases. A phrase contains words. The search syntax captures this with indentation:
+
+```text
+clause
+  phrase
+    word sp=verb
+```
+
+This finds clauses that contain a phrase that contains a verb. The indentation establishes containment—the phrase must be *inside* the clause, and the word must be *inside* the phrase.
+
+You can add constraints at any level:
+
+```text
+clause typ=xQtX
+  phrase function=Pred
+    word sp=verb vs=qal
+```
+
+This searches for xQtX clauses (a specific clause type) with a predicate phrase containing a Qal verb.
+
+<Callout type="info">
+Indentation must be consistent—use either spaces or tabs, not both. Two spaces per level is conventional.
+</Callout>
+
+## Multiple Elements at the Same Level
+
+When you need to match multiple elements at the same structural level, list them with the same indentation:
+
+```text
+clause
+  phrase function=Subj
+  phrase function=Pred
+```
+
+This finds clauses containing both a subject phrase AND a predicate phrase. Both phrases must exist in the same clause.
+
+Order doesn't matter here—you're just asserting that both exist somewhere in the clause. For order constraints, you need relations.
+
+## Relations: Expressing Word Order
+
+Relations let you specify the relative positions of matched elements. The most common:
+
+| Operator | Meaning |
+|----------|---------|
+| `<` | Comes before (in the text) |
+| `>` | Comes after |
+| `<:` | Immediately before (adjacent) |
+| `:>` | Immediately after (adjacent) |
+| `==` | Same slots (overlapping) |
+
+Example—find a verb followed by a noun:
+
+```text
+clause
+  word sp=verb
+  > word sp=subs
+```
+
+The `>` means the second word comes after the first. In BHSA, this returns thousands of matches.
+
+For adjacent elements, use the colon variants:
+
+```text
+phrase
+  word sp=art
+  :> word sp=subs
+```
+
+This finds an article immediately followed by a noun—the classic Hebrew definite article construction. No intervening words allowed.
+
+## Combining Patterns
+
+Real queries combine these techniques. Let's find subject-initial clauses where the subject contains a noun:
+
+```text
+c:clause
+p:phrase function=Subj
+  word sp=subs
+c =: p
+```
+
+The `=:` means the phrase starts at the same position as the clause—it's clause-initial. The named atoms (`c:` and `p:`) let us express the relation between clause and phrase explicitly.
+
+For wayyiqtol verbs (consecutive imperfect), note that BHSA encodes the waw conjunction as a separate word. To find clauses with wayyiqtol verbs:
+
+```text
+clause
+  phrase function=Pred
+    word sp=verb vt=wayq
+```
+
+## Real-World Examples
+
+### Finding Construct Chains
+
+Hebrew construct chains link nouns in a possessive relationship. Find them by looking for construct-state nouns followed by absolute-state nouns:
+
+```text
+phrase
+  word sp=subs st=c
+  :> word sp=subs st=a
+```
+
+### Divine Name in Predicate Position
+
+Where does the divine name (JHWH) appear as the subject of a sentence?
+
+```text
+clause
+  phrase function=Subj
+    word lex=JHWH/
+```
+
+### Questions with Interrogative Particles
+
+Find clauses that start with the interrogative he:
+
+```text
+clause
+  =: word sp=inrg lex=H
+```
+
+<Callout type="note">
+These examples use BHSA-specific features. Different corpora will have different feature names and values. Always run the discovery workflow first.
+</Callout>
+
+## Query Development Strategy
+
+Start simple, then refine:
+
+1. **Begin with the core constraint**: `word sp=verb`
+2. **Check the count**: `search(template, return_type="count")`
+3. **Add structural context**: Wrap in clause, add phrase constraints
+4. **Check again**: Is the count reasonable?
+5. **Add relations**: Specify order if needed
+6. **Verify with samples**: Look at actual matches
+
+This iterative approach prevents you from writing a complex query that returns nothing—or everything.
+
+## Next Steps
+
+You can build queries now, but how do you work with the results? The next tutorial covers counting, aggregating, and paginating.
+
+[Continue to Analyzing Results →](/docs/mcp/tutorials/analyzing-results)

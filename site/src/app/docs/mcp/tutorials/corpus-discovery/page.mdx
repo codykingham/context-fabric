@@ -1,0 +1,198 @@
+# Corpus Discovery Workflow
+
+Before you can search a corpus, you need to know what's in it. What node types exist? What features annotate them? What values do those features take? Context-Fabric provides a systematic workflow for answering these questions.
+
+The discovery sequence:
+
+1. **describe_corpus** — Get the high-level structure
+2. **list_features** — See what's annotated
+3. **describe_feature** — Examine specific features in detail
+4. **get_text_formats** — Understand text encoding
+
+## Step 1: Describe the Corpus
+
+Start with `describe_corpus()` to get the lay of the land. This returns the node types (the objects you can query) and the section hierarchy (how the text is organized).
+
+```python
+describe_corpus()
+```
+
+Example response for BHSA:
+
+```json
+{
+  "node_types": {
+    "word": 426584,
+    "phrase": 253207,
+    "phrase_atom": 267532,
+    "clause": 88131,
+    "clause_atom": 90704,
+    "sentence": 63717,
+    "half_verse": 45180,
+    "verse": 23213,
+    "chapter": 929,
+    "book": 39,
+    "lex": 9230
+  },
+  "sections": ["book", "chapter", "verse"]
+}
+```
+
+The numbers tell you the count of each node type. BHSA has 426,584 words, 88,131 clauses, 39 books. The section hierarchy means you can reference passages like `["Genesis", 1, 1]`.
+
+<Callout type="info">
+Node types with higher counts (like `word` and `phrase`) are your primary query targets. Types like `book` and `chapter` are typically used for containment rather than direct matching.
+</Callout>
+
+## Step 2: List Features
+
+Now that you know the node types, explore what features annotate them. The `list_features` function can filter by node type.
+
+```python
+list_features(node_types=["word"])
+```
+
+Example response (abbreviated):
+
+```json
+[
+  {"name": "sp", "kind": "node", "value_type": "str", "description": "Part of speech"},
+  {"name": "lex", "kind": "node", "value_type": "str", "description": "Lexeme (dictionary form)"},
+  {"name": "vs", "kind": "node", "value_type": "str", "description": "Verbal stem"},
+  {"name": "vt", "kind": "node", "value_type": "str", "description": "Verbal tense"},
+  {"name": "gn", "kind": "node", "value_type": "str", "description": "Gender"},
+  {"name": "nu", "kind": "node", "value_type": "str", "description": "Number"},
+  {"name": "ps", "kind": "node", "value_type": "str", "description": "Person"}
+]
+```
+
+Each entry tells you:
+- **name**: The feature identifier used in queries
+- **kind**: Whether it's a node feature or edge feature
+- **value_type**: The data type (str, int, etc.)
+- **description**: What it represents
+
+To see phrase-level features:
+
+```python
+list_features(node_types=["phrase"])
+```
+
+```json
+[
+  {"name": "function", "kind": "node", "value_type": "str", "description": "Syntactic function"},
+  {"name": "typ", "kind": "node", "value_type": "str", "description": "Phrase type"},
+  {"name": "rela", "kind": "node", "value_type": "str", "description": "Relation to parent"}
+]
+```
+
+## Step 3: Examine Feature Details
+
+Once you've identified interesting features, use `describe_feature` to see their actual values. This is essential for writing correct queries.
+
+```python
+describe_feature("sp")
+```
+
+Example response:
+
+```json
+{
+  "name": "sp",
+  "kind": "node",
+  "value_type": "str",
+  "description": "Part of speech",
+  "node_types": ["word"],
+  "unique_values": 14,
+  "sample_values": [
+    {"value": "subs", "count": 98977},
+    {"value": "prep", "count": 72590},
+    {"value": "conj", "count": 61648},
+    {"value": "verb", "count": 50264},
+    {"value": "art", "count": 30387},
+    {"value": "nmpr", "count": 34303},
+    {"value": "prps", "count": 4558},
+    {"value": "prde", "count": 3034},
+    {"value": "advb", "count": 6151},
+    {"value": "nega", "count": 6295}
+  ]
+}
+```
+
+Now you know that `sp=verb` will match 50,264 words, and that "subs" (substantive/noun) is the most common part of speech.
+
+<Callout type="tip">
+The sample_values are sorted by frequency. This helps you understand the distribution—rare values might indicate specialized constructions worth investigating.
+</Callout>
+
+You can describe multiple features at once:
+
+```python
+describe_feature(["vs", "vt"])
+```
+
+This returns detailed information for both verbal stem and verbal tense, letting you understand how verb morphology is encoded.
+
+## Step 4: Get Text Formats
+
+The final discovery step: understanding how text is encoded. Different corpora use different scripts and transliteration schemes.
+
+```python
+get_text_formats()
+```
+
+Example response for BHSA:
+
+```json
+{
+  "formats": {
+    "text-orig-full": {
+      "description": "Full Hebrew text with vowels and accents",
+      "samples": ["בְּרֵאשִׁ֖ית", "בָּרָ֣א", "אֱלֹהִ֑ים"]
+    },
+    "text-phono-full": {
+      "description": "Phonological transcription",
+      "samples": ["bərēšîṯ", "bārāʾ", "ʾĕlōhîm"]
+    },
+    "lex-orig-plain": {
+      "description": "Lexeme in Hebrew script",
+      "samples": ["ראשׁית", "ברא", "אלהים"]
+    }
+  }
+}
+```
+
+This tells you:
+- The corpus uses Hebrew script (you might need to match against Hebrew characters)
+- Transliterated forms are available
+- Lexemes are stored without vowel points
+
+<Callout type="warning">
+Always check text formats before writing queries that match against text. A query for `lex=beginning` will fail in BHSA—you need `lex=R>CJT` (the transliterated form) or `lex=ראשׁית` (Hebrew script).
+</Callout>
+
+## The Complete Discovery Session
+
+Here's what a typical discovery session looks like:
+
+```text
+1. describe_corpus()
+   → "I see 426K words across 39 books, organized by book/chapter/verse"
+
+2. list_features(node_types=["word"])
+   → "Words have sp, lex, gn, nu, ps features..."
+
+3. describe_feature("sp")
+   → "Parts of speech: verb (50K), subs (99K), prep (73K)..."
+
+4. get_text_formats()
+   → "Text is in Hebrew script, lexemes use specific encoding"
+```
+
+After these four steps, you have everything needed to write precise queries. You know what objects exist, what features describe them, what values those features take, and how text is encoded.
+
+## Next Steps
+
+Now that you can discover a corpus, it's time to search it. The next tutorial covers the query syntax in detail.
+
+[Continue to Building Search Queries →](/docs/mcp/tutorials/building-queries)

@@ -1,0 +1,139 @@
+# Loading Corpora
+
+Every Context-Fabric session begins with loading a corpus. This tutorial covers the `Fabric` class, loading strategies, and accessing the API.
+
+## Installation
+
+```bash
+pip install context-fabric
+```
+
+## The Fabric Class
+
+The `Fabric` class locates and manages corpus data:
+
+```python
+import cfabric
+
+CF = cfabric.Fabric('/path/to/corpus')
+```
+
+The path should point to a directory containing `.tf` files (Text-Fabric format) or `.cfm` files (Context-Fabric compiled format).
+
+## Loading Features
+
+### Load Everything
+
+For most use cases, load all features at once:
+
+```python
+api = CF.loadAll()
+```
+
+This returns an API object with access to all node features, edge features, and computed data.
+
+### Selective Loading
+
+For large corpora or memory-constrained environments, load specific features:
+
+```python
+api = CF.load('sp', 'lex', 'gn', 'nu')  # Only these features
+```
+
+## The API Object
+
+The API object provides access to six sub-APIs:
+
+```python
+F = api.F  # Node features
+E = api.E  # Edge features
+L = api.L  # Locality (containment)
+T = api.T  # Text access
+S = api.S  # Search
+N = api.N  # Node ordering
+```
+
+You can hoist all API members to your namespace in one call:
+
+```python
+api.makeAvailableIn(globals())
+
+# Now F, L, T, S, E, N are available directly
+print(F.sp.v(1))  # No need for api.F
+```
+
+## First Load vs Subsequent Loads
+
+On first load, Context-Fabric compiles the corpus from `.tf` files to memory-mapped `.cfm` files. This takes a few seconds but only happens once:
+
+```
+Loading corpus...
+Compiling features (first run)...
+Done in 3.2s
+```
+
+Subsequent loads are near-instant:
+
+```
+Loading corpus...
+Done in 0.4s
+```
+
+## Example Session
+
+```python
+import cfabric
+
+# Load the BHSA corpus
+CF = cfabric.Fabric('/path/to/bhsa')
+api = CF.loadAll()
+
+# Access features
+F = api.F
+
+# Get part of speech for word 1
+print(F.sp.v(1))  # 'prep'
+
+# Get all verbs
+verbs = F.sp.s('verb')
+print(f"Found {len(verbs)} verbs")
+
+# Get text
+T = api.T
+print(T.text(1))  # The text of word 1
+```
+
+## Text-Fabric Compatibility
+
+The API is identical to Text-Fabric. Only the import differs:
+
+```python
+# Text-Fabric
+from tf.fabric import Fabric
+TF = Fabric(locations='/path/to/corpus')
+api = TF.loadAll()
+
+# Context-Fabric (same API, only the import differs)
+from cfabric import Fabric
+CF = Fabric('/path/to/corpus')
+api = CF.loadAll()
+```
+
+Existing Text-Fabric code works with minimal changes—just update the import line.
+
+## Memory Efficiency
+
+Context-Fabric uses memory-mapped files, which means:
+
+- Only accessed data is loaded into RAM
+- Multiple processes share the same memory pages
+- Large corpora (1GB+) work on modest hardware
+- Multiple corpora can be loaded simultaneously without memory hogging
+
+This is the key architectural difference from Text-Fabric. You can now load BHSA, DSS, LXX, and the Greek New Testament all at once on a consumer laptop—something that would exhaust memory with Text-Fabric.
+
+## Next Steps
+
+Now that you can load a corpus, explore what features it contains:
+
+[Continue to Corpus Discovery](/docs/core/tutorials/corpus-discovery)

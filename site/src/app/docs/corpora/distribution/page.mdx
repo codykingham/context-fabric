@@ -1,0 +1,111 @@
+# Getting Corpora
+
+<Callout type="warning" title="Roadmap Feature">
+Hugging Face distribution is planned but not yet implemented. Currently, corpora should be downloaded directly from their GitHub repositories. This page describes the upcoming distribution system.
+</Callout>
+
+## Current Approach: GitHub
+
+Text-Fabric corpora are currently distributed via GitHub repositories. Text-Fabric includes a built-in downloader that fetches zipped corpus data attached to GitHub releases, but this approach has limitations.
+
+### GitHub Rate Limiting
+
+GitHub's API enforces rate limits that affect corpus downloads:
+
+- **Anonymous users**: 60 requests per hour
+- **Authenticated users**: 5,000 requests per hour (requires personal access token)
+
+Users who download multiple corpora or check for updates frequently can exhaust these limits. When rate-limited, users must wait an hour, configure authentication tokens, or fall back to manual cloning.
+
+### Manual Download
+
+For now, the most reliable approach is to clone repositories directly:
+
+```bash
+git clone --depth 1 https://github.com/ETCBC/bhsa.git
+```
+
+```python
+from cfabric import Fabric
+
+CF = Fabric('/path/to/bhsa/tf/c')
+api = CF.loadAll()
+```
+
+See the [Corpus Index](/docs/corpora) for links to available repositories.
+
+## Planned: Hugging Face Hub
+
+Future versions of Context-Fabric will include a built-in downloader using Hugging Face Hub, eliminating the rate limiting issues with GitHub.
+
+### Why Hugging Face
+
+Hugging Face Hub is already the standard platform for sharing large assets in the machine learning community. It's community-driven—anyone can create an account and upload datasets—and provides a standardized API for downloading. This is exactly what corpus distribution needs: a reliable, rate-limit-free platform where corpus maintainers can publish independently without centralized gatekeeping.
+
+| Benefit | Description |
+|---------|-------------|
+| No rate limiting | Unlimited downloads without authentication |
+| Community-driven | Anyone can publish corpora under their namespace |
+| Proven at scale | Already hosts thousands of large datasets |
+| Standardized API | Consistent download experience across all corpora |
+
+### Planned API
+
+```python
+import cfabric
+
+# List available corpora
+cfabric.list_corpora()
+
+# Download by short name (from registry)
+path = cfabric.download('bhsa')
+
+# Or by full Hugging Face repo ID
+path = cfabric.download('etcbc/cfabric-bhsa')
+
+# Pin to a specific version
+path = cfabric.download('bhsa', revision='v2023.1')
+
+# Load the downloaded corpus
+CF = cfabric.Fabric(locations=path)
+api = CF.loadAll()
+```
+
+### Namespace Convention
+
+Corpora on Hugging Face will follow this naming pattern:
+
+```
+huggingface.co/datasets/{username}/cfabric-{corpus-name}
+```
+
+Examples:
+- `etcbc/cfabric-bhsa` — Official BHSA Hebrew Bible
+- `context-fabric/cfabric-demo` — Demo corpus
+- `researcher/cfabric-my-corpus` — Community contribution
+
+### For Corpus Contributors
+
+Once implemented, anyone will be able to publish corpora:
+
+1. Create a Hugging Face account
+2. Create a dataset repo named `cfabric-{your-corpus}`
+3. Upload your `.tf` files
+4. Add a README with the `context-fabric` tag
+5. Share your repo ID — users download with `cfabric.download('username/cfabric-corpus')`
+
+### Repository Structure
+
+```
+cfabric-{corpus-name}/
+├── README.md              # Dataset card with metadata
+└── tf/                    # Text-Fabric source files
+    ├── otype.tf
+    ├── oslots.tf
+    ├── otext.tf
+    └── {features}.tf
+```
+
+## Timeline
+
+This distribution system is on the roadmap. Follow the [GitHub repository](https://github.com/context-fabric/context-fabric) for updates.

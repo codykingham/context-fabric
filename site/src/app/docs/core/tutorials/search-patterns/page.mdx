@@ -1,0 +1,231 @@
+# Search Patterns
+
+The `S.search()` method finds linguistic patterns using a template language. This is the same syntax used by the MCP server, but accessed directly via Python.
+
+## Basic Search
+
+A search template describes the pattern you want to find:
+
+```python
+results = S.search('''
+word sp=verb
+''')
+
+print(f"Found {len(results)} verbs")
+```
+
+Results are tuples of node IDs matching each element in your template.
+
+## Template Syntax
+
+### Single Node with Constraint
+
+```python
+# All verbs
+S.search('word sp=verb')
+
+# All Qal verbs
+S.search('word sp=verb vs=qal')
+
+# All nouns in construct state
+S.search('word sp=subs st=c')
+```
+
+### Multiple Constraints
+
+Constraints on the same line are combined with AND:
+
+```python
+# Masculine plural verbs
+S.search('word sp=verb gn=m nu=pl')
+```
+
+### Regex Matching
+
+Use `~` for pattern matching:
+
+```python
+# Lexemes starting with BR
+S.search('word lex~BR.*')
+
+# Lexemes ending with H
+S.search('word lex~.*H$')
+```
+
+## Structural Patterns
+
+### Containment (Indentation)
+
+Indentation expresses "contains":
+
+```python
+# Clauses containing a verb
+results = S.search('''
+clause
+  word sp=verb
+''')
+
+# Phrases containing a noun
+results = S.search('''
+phrase
+  word sp=subs
+''')
+```
+
+### Multiple Elements
+
+Find structures containing multiple elements:
+
+```python
+# Clauses with both subject and predicate phrases
+results = S.search('''
+clause
+  phrase function=Subj
+  phrase function=Pred
+''')
+```
+
+### Nested Structure
+
+```python
+# Predicate phrase containing a Qal verb
+results = S.search('''
+clause
+  phrase function=Pred
+    word sp=verb vs=qal
+''')
+```
+
+## Positional Relations
+
+### Before/After
+
+```python
+# Verb followed by noun (somewhere after)
+results = S.search('''
+clause
+  word sp=verb
+  > word sp=subs
+''')
+```
+
+### Immediately Adjacent
+
+```python
+# Article immediately followed by noun
+results = S.search('''
+phrase
+  word sp=art
+  :> word sp=subs
+''')
+```
+
+### Same Position
+
+```python
+# Phrase at clause start
+results = S.search('''
+c:clause
+p:phrase function=Subj
+c =: p
+''')
+```
+
+## Relation Operators
+
+| Operator | Meaning |
+|----------|---------|
+| `<` | Comes before |
+| `>` | Comes after |
+| `<:` | Immediately before |
+| `:>` | Immediately after |
+| `=:` | Starts at same position |
+| `:=` | Ends at same position |
+| `::` | Same start and end |
+| `==` | Same slots |
+| `[[` | Left embeds right |
+| `]]` | Left embedded in right |
+
+## Working with Results
+
+Results are tuples matching the template elements:
+
+```python
+results = S.search('''
+clause
+  phrase function=Pred
+    word sp=verb
+''')
+
+for clause, phrase, word in results:
+    print(f"Clause {clause}: verb at word {word}")
+    print(f"  Text: {T.text(clause)}")
+```
+
+### Limiting Results
+
+```python
+# Get first 10 results
+results = S.search('''
+word sp=verb
+''', limit=10)
+```
+
+## Example: Subject-Verb Agreement
+
+```python
+# Find clauses where subject has masculine plural noun
+# and predicate has a verb
+results = S.search('''
+clause
+  phrase function=Subj
+    word sp=subs gn=m nu=pl
+  phrase function=Pred
+    word sp=verb
+''')
+
+for clause, subj_phrase, subj_word, pred_phrase, verb in results:
+    verb_gender = F.gn.v(verb)
+    verb_number = F.nu.v(verb)
+    section = T.sectionFromNode(clause)
+    print(f"{section}: verb is {verb_gender}/{verb_number}")
+```
+
+## Example: Construct Chains
+
+```python
+# Find construct-absolute noun pairs
+results = S.search('''
+phrase
+  word sp=subs st=c
+  :> word sp=subs st=a
+''')
+
+for phrase, construct, absolute in results:
+    print(f"{F.lex.v(construct)} + {F.lex.v(absolute)}")
+```
+
+## Example: Divine Name in Context
+
+```python
+# YHWH as subject
+results = S.search('''
+clause
+  phrase function=Subj
+    word lex=JHWH/
+''')
+
+print(f"YHWH appears as subject {len(results)} times")
+```
+
+## Performance Tips
+
+1. **More constraints = faster search**: `word sp=verb vs=qal` is faster than `word sp=verb`
+2. **Put selective constraints first**: If one constraint matches fewer nodes, put it earlier
+3. **Use `limit`**: When exploring, limit results to avoid processing thousands
+
+## Next Steps
+
+Apply these techniques to a real corpus:
+
+[Continue to Working with BHSA](/docs/core/tutorials/working-with-bhsa)

@@ -1,0 +1,61 @@
+# Core Library Tutorials
+
+These tutorials teach you to use Context-Fabric's Python API directly. If you're writing scripts, building applications, or need programmatic control over corpus analysis, start here.
+
+## Learning Path
+
+### 1. Loading Corpora
+
+Set up your environment and load your first corpus. Understand the `Fabric` class, `loadAll()`, and the API object.
+
+[Start with Loading Corpora](/docs/core/tutorials/loading-corpora)
+
+### 2. Corpus Discovery
+
+Every corpus has different features. Learn to explore what's available before diving into analysis. The `describe` module provides introspection functions for any corpus.
+
+[Continue to Corpus Discovery](/docs/core/tutorials/corpus-discovery)
+
+### 3. Feature Access
+
+Learn to query node and edge features. The `F` and `E` APIs are your primary tools for accessing linguistic annotations.
+
+[Continue to Feature Access](/docs/core/tutorials/feature-access)
+
+### 4. Navigation
+
+Move through the corpus structure. The `L` API handles containment relationships; the `T` API retrieves text; the `N` API manages node ordering.
+
+[Continue to Navigation](/docs/core/tutorials/navigation)
+
+### 5. Search Patterns
+
+Write search templates to find linguistic patterns. The `S.search()` method uses the same template syntax as the MCP server.
+
+[Continue to Search Patterns](/docs/core/tutorials/search-patterns)
+
+### 6. Working with BHSA
+
+A deep dive into the Hebrew Bible corpus. Practical examples of the APIs applied to real linguistic questions.
+
+[Continue to Working with BHSA](/docs/core/tutorials/working-with-bhsa)
+
+## Prerequisites
+
+- Python 3.10 or later
+- Context-Fabric installed: `pip install context-fabric`
+- A corpus to work with (see [Available Corpora](/docs/corpora))
+
+## Text-Fabric Compatibility
+
+If you have existing Text-Fabric code, it works with Context-Fabric. The only change is the import:
+
+```python
+# Text-Fabric
+from tf.fabric import Fabric
+
+# Context-Fabric (just change the import)
+from cfabric import Fabric
+```
+
+The `F`, `L`, `T`, `S`, `E`, and `N` APIs are identical.

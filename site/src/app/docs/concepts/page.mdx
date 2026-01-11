@@ -1,0 +1,37 @@
+# Concepts
+
+Every word has an address. Every phrase knows its children. Every annotation is queryable.
+
+Context-Fabric represents annotated text as a directed graph where linguistic structure becomes queryable, traversable, and computable. This section explains the conceptual foundations that make this possible.
+
+## The Core Ideas
+
+At its heart, Context-Fabric encodes text as a network of nodes and edges. Words form the atomic substrate. Phrases, clauses, sentences, chapters, and books emerge as containing structures. Features annotate nodes with morphological, syntactic, and semantic properties. Edges encode relationships: containment, sequence, and linguistic dependency.
+
+This model is not arbitrary. It mirrors how scholars have always organized textual knowledge: hierarchies within hierarchies, annotations upon annotations, cross-references spanning verses and chapters. Context-Fabric simply makes these implicit structures explicit and machine-navigable.
+
+## Explore the Foundations
+
+<Callout type="info">
+These concept pages are designed for researchers who want to understand the data model deeply, and for developers migrating from Text-Fabric or building new corpus applications.
+</Callout>
+
+### [Architecture](/docs/concepts/architecture)
+
+Memory-mapped storage, predictable performance, and why Context-Fabric loads corpora in milliseconds instead of minutes. The engineering decisions that make AI-scale corpus exploration practical.
+
+### [Graph Data Model](/docs/concepts/graph-model)
+
+The directed graph at the heart of Context-Fabric. Slot nodes, non-slot nodes, features, and edges. How containment hierarchies encode linguistic structure from words to books.
+
+### [Text-Fabric Compatibility](/docs/concepts/text-fabric-compat)
+
+Text-Fabric taught the world how to model annotated text. Context-Fabric learned the lesson and optimized the implementation. Migration paths, API compatibility, and what changed.
+
+### [Section References](/docs/concepts/section-references)
+
+Book, chapter, verse. The canonical addressing scheme for navigating corpora. Language-aware lookups and batch passage retrieval.
+
+---
+
+These concepts form the grammar of corpus exploration. Master them, and the entire annotated text becomes navigable.

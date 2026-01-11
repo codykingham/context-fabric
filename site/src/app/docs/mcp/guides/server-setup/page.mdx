@@ -1,0 +1,96 @@
+# MCP Server Setup
+
+The Model Context Protocol (MCP) server exposes your corpora to AI assistants. Instead of manually running queries and pasting results, AI agents can explore the data directly—running searches, examining features, and iterating on queries autonomously.
+
+## Prerequisites
+
+- Python 3.10 or later
+- At least one Text-Fabric corpus
+- An MCP-compatible AI client (Claude Desktop, ChatGPT, or API integration)
+
+## Installation
+
+Install Context-Fabric with MCP support:
+
+```bash
+pip install context-fabric[mcp]
+```
+
+This installs the core library plus the MCP server components.
+
+<Callout type="info">
+If you already have `context-fabric` installed, the same command adds MCP support—pip will install only the additional dependencies.
+</Callout>
+
+## Running the Server
+
+### Single Corpus
+
+The simplest configuration loads one corpus:
+
+```bash
+cfabric-mcp --corpus /path/to/bhsa
+```
+
+The server starts and waits for MCP connections. You won't see much output—that's normal.
+
+### Multiple Corpora
+
+Load several corpora at once:
+
+```bash
+cfabric-mcp --corpus /path/to/bhsa --corpus /path/to/lxx --corpus /path/to/dss
+```
+
+Each corpus becomes available to the AI agent, which can switch between them or run comparative queries.
+
+### CLI Options
+
+| Option | Description |
+|--------|-------------|
+| `--corpus PATH` | Path to a corpus directory (repeatable) |
+| `--default CORPUS` | Set the default corpus for queries |
+| `--log-level LEVEL` | Set logging verbosity (DEBUG, INFO, WARNING, ERROR) |
+
+## Available MCP Tools
+
+Once connected, AI agents have access to these tools:
+
+| Tool | Purpose |
+|------|---------|
+| `list_corpora` | Show available corpora |
+| `describe_corpus` | Get corpus structure overview |
+| `list_features` | Browse available features |
+| `describe_feature` | Get detailed feature info with sample values |
+| `get_text_formats` | See text encoding options |
+| `search` | Run search queries |
+| `search_continue` | Paginate through results |
+| `search_syntax_guide` | Get help on query syntax |
+| `get_passages` | Retrieve text by section reference |
+| `get_node_features` | Get feature values for specific nodes |
+
+## Client Setup
+
+Configure your AI client to connect to the MCP server:
+
+- [Claude Desktop & Claude Code](/docs/mcp/guides/claude-integration) — Anthropic's desktop app and CLI
+- [LangChain](/docs/mcp/guides/langchain-integration) — LangChain and LangGraph agents
+- [ChatGPT](/docs/mcp/guides/chatgpt-integration) — OpenAI's ChatGPT with Developer Mode
+
+## Troubleshooting
+
+### "Server not found" or Connection Errors
+
+- Verify the command path is correct and executable
+- Check that Context-Fabric is installed with MCP support
+- Try running `cfabric-mcp --help` manually to confirm installation
+
+### "Corpus not found" Errors
+
+- Use absolute paths in the configuration
+- Verify the corpus directory exists and contains `.tf` or `.cfm` files
+- Check file permissions
+
+### Slow Startup
+
+The first query after startup may take a few seconds as corpora load into memory. Subsequent queries are faster thanks to memory-mapped storage.

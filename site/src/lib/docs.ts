@@ -9,6 +9,7 @@ import type {
   DocFunction,
   DocsIndex,
   NavItem,
+  NavSection,
   SearchItem,
 } from "@/types/docs";
 
@@ -33,6 +34,108 @@ export const packages: Record<string, DocModule> = {
 };
 
 export const navigation: NavItem[] = index.navigation;
+
+// MDX-based documentation navigation
+export const mdxNavigation: NavSection[] = [
+  {
+    title: "Getting Started",
+    type: "manual",
+    items: [
+      { title: "Installation", path: "/docs/getting-started" },
+      { title: "First Corpus", path: "/docs/getting-started/first-corpus" },
+      {
+        title: "Basic Exploration",
+        path: "/docs/getting-started/basic-exploration",
+      },
+    ],
+  },
+  {
+    title: "Corpora",
+    type: "manual",
+    items: [
+      { title: "Corpus Index", path: "/docs/corpora" },
+      { title: "Creating Corpora", path: "/docs/corpora/creating" },
+      { title: "Getting Corpora", path: "/docs/corpora/distribution" },
+    ],
+  },
+  {
+    title: "Concepts",
+    type: "manual",
+    items: [
+      { title: "Overview", path: "/docs/concepts" },
+      { title: "Graph Data Model", path: "/docs/concepts/graph-model" },
+      { title: "Section References", path: "/docs/concepts/section-references" },
+      {
+        title: "Text-Fabric Compatibility",
+        path: "/docs/concepts/text-fabric-compat",
+      },
+      { title: "Architecture", path: "/docs/concepts/architecture" },
+    ],
+  },
+  {
+    title: "File Formats",
+    type: "manual",
+    items: [
+      { title: "Overview", path: "/docs/file-formats" },
+      { title: "TF Format", path: "/docs/file-formats/tf-format" },
+      { title: "CFM Format", path: "/docs/file-formats/cfm-format" },
+    ],
+  },
+  {
+    title: "Core Library",
+    type: "manual",
+    items: [
+      { title: "Overview", path: "/docs/core" },
+      {
+        title: "Loading Corpora",
+        path: "/docs/core/tutorials/loading-corpora",
+      },
+      {
+        title: "Corpus Discovery",
+        path: "/docs/core/tutorials/corpus-discovery",
+      },
+      { title: "Feature Access", path: "/docs/core/tutorials/feature-access" },
+      { title: "Navigation", path: "/docs/core/tutorials/navigation" },
+      { title: "Search Patterns", path: "/docs/core/tutorials/search-patterns" },
+      {
+        title: "Working with BHSA",
+        path: "/docs/core/tutorials/working-with-bhsa",
+      },
+    ],
+  },
+  {
+    title: "MCP Server",
+    type: "manual",
+    items: [
+      { title: "Overview", path: "/docs/mcp" },
+      { title: "Server Setup", path: "/docs/mcp/guides/server-setup" },
+      { title: "Tools Reference", path: "/docs/mcp/guides/tools" },
+      { title: "Agent Context", path: "/docs/mcp/guides/agent-context" },
+      { title: "Claude Integration", path: "/docs/mcp/guides/claude-integration" },
+      { title: "LangChain Integration", path: "/docs/mcp/guides/langchain-integration" },
+      { title: "ChatGPT Integration", path: "/docs/mcp/guides/chatgpt-integration" },
+      { title: "AI Workflows", path: "/docs/mcp/guides/ai-workflows" },
+    ],
+  },
+  {
+    title: "Resources",
+    type: "manual",
+    items: [
+      { title: "Technical Paper", path: "/docs/paper" },
+      { title: "GitHub Repository", path: "https://github.com/context-fabric/context-fabric" },
+    ],
+  },
+];
+
+// Combined navigation: MDX sections + API Reference
+export const fullNavigation: NavSection[] = [
+  ...mdxNavigation,
+  {
+    title: "API Reference",
+    type: "api",
+    items: navigation,
+  },
+];
 
 /**
  * Get a module by package name and path segments

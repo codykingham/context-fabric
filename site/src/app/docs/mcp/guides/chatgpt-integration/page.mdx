@@ -1,0 +1,84 @@
+# ChatGPT Integration
+
+ChatGPT supports MCP servers through Developer Mode, available to Pro, Plus, Business, Enterprise, and Education accounts.
+
+<Callout type="info">
+ChatGPT MCP support requires a remotely-hosted server with HTTP/SSE transport. Unlike Claude Desktop which runs local servers, ChatGPT connects to servers via URL.
+</Callout>
+
+## Hosting the MCP Server
+
+ChatGPT requires your MCP server to be accessible via HTTPS. Options include:
+
+- **Cloud hosting** — Deploy on a VPS, cloud function, or container service
+- **Tunnel services** — Use ngrok, Cloudflare Tunnel, or similar to expose a local server
+- **Docker** — Package the server for deployment
+
+### Basic Server with HTTP Transport
+
+```bash
+# Start server with HTTP transport (for remote access)
+cfabric-mcp --corpus /path/to/corpus --transport http --port 8080
+```
+
+<Callout type="warning">
+For production, add authentication and run behind HTTPS. The server exposes your corpus data to anyone who can reach the endpoint.
+</Callout>
+
+## ChatGPT Configuration
+
+### Enable Developer Mode
+
+1. Go to ChatGPT **Settings**
+2. Select **Connectors** → **Advanced**
+3. Enable **Developer Mode**
+
+### Add MCP Connector
+
+1. In Connectors settings, click **Create**
+2. Enter:
+   - **Name**: Context-Fabric
+   - **URL**: Your server URL (e.g., `https://your-server.com/mcp`)
+   - **Authentication**: Configure OAuth if required
+3. Save the connector
+
+### Verify Connection
+
+Start a new conversation and ask:
+> "What corpora do you have access to via Context-Fabric?"
+
+If connected, ChatGPT will list available corpora.
+
+## Agentic Patterns
+
+ChatGPT follows similar patterns to Claude when working with Context-Fabric:
+
+1. **Discover structure** — Explore corpus metadata and available features
+2. **Build queries** — Construct search templates iteratively
+3. **Analyze results** — Aggregate statistics and identify patterns
+
+### Example Prompts
+
+**Research task**:
+> "Using Context-Fabric, analyze how participial clauses function in Hebrew poetry vs prose"
+
+**Comparative analysis**:
+> "Search for divine name usage patterns across Genesis and Exodus"
+
+**Query building**:
+> "Help me construct a search template for finding all instances of the imperative followed by a vocative"
+
+## Limitations
+
+- **Remote hosting required** — ChatGPT cannot connect to local servers directly
+- **Authentication complexity** — OAuth setup required for secure deployments
+- **Rate limits** — ChatGPT may throttle frequent tool calls
+
+## Resources
+
+- [OpenAI MCP Documentation](https://platform.openai.com/docs/mcp)
+- [Docker MCP Server Guide](https://www.docker.com/blog/add-mcp-server-to-chatgpt/)
+
+---
+
+Next: [AI Workflows](/docs/mcp/guides/ai-workflows)

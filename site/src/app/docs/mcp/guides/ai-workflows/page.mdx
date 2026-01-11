@@ -1,0 +1,203 @@
+# AI Workflows
+
+Productive AI-assisted research follows patterns. Not rigid scripts—more like recurring strategies that tend to yield good results. These workflows have emerged from actual use of AI agents with Context-Fabric corpora.
+
+## The Discovery Workflow
+
+Start here when approaching an unfamiliar corpus or research question.
+
+### Phase 1: Orientation
+
+```
+You: I want to study discourse markers in the Dead Sea Scrolls.
+     What's available in this corpus?
+```
+
+The agent will:
+1. Call `describe_corpus` to map the node type hierarchy
+2. Use `list_features` to catalog linguistic annotations
+3. Identify features relevant to discourse analysis
+
+This phase builds shared vocabulary. You'll learn what the corpus calls things; the agent will learn what you're interested in.
+
+### Phase 2: Feature Exploration
+
+```
+You: Tell me about the clause type feature. What values does it have?
+```
+
+The agent calls `describe_feature` and returns:
+- All possible values with frequencies
+- Which node types carry this feature
+- Sample contexts for ambiguous values
+
+This is where you discover that what you call "discourse markers" might be encoded as clause types, particle features, or phrase functions—or some combination.
+
+### Phase 3: Probe Queries
+
+Run small, targeted searches to verify understanding:
+
+```
+You: Find 5 examples of exclamatory clauses in 1QS.
+```
+
+Review the results. Do they match your expectations? If not, iterate—refine the query, try different features, adjust scope.
+
+### Phase 4: Systematic Search
+
+Once you've validated your approach on small samples, expand:
+
+```
+You: Now search for all exclamatory clauses across the corpus.
+     Group results by document.
+```
+
+<Callout type="tip">
+Save your working queries. The discovery workflow is reusable, but the specific queries you develop are valuable artifacts of the research process.
+</Callout>
+
+## The Analysis Workflow
+
+For testing specific hypotheses against corpus data.
+
+### Step 1: Formulate a Testable Claim
+
+Start with something precise:
+
+> "Wayyiqtol verb forms occur more frequently in direct speech than in narrative prose in Genesis."
+
+Vague intuitions ("wayyiqtol is interesting") don't translate into queries. Push yourself to make specific, falsifiable claims.
+
+### Step 2: Operationalize the Variables
+
+```
+You: How can I identify direct speech versus narrative in this corpus?
+     What features mark these distinctions?
+```
+
+The agent explores the annotations and helps you map abstract concepts to queryable features. Maybe direct speech is marked with a `typ` feature; maybe you need to look for speech-introducing verbs.
+
+### Step 3: Build the Query
+
+```
+You: Search for wayyiqtol verbs where the containing clause
+     has type 'direct speech'. Count them.
+```
+
+Then:
+
+```
+You: Now search for wayyiqtol in narrative clauses. Count those.
+```
+
+### Step 4: Interpret and Refine
+
+The numbers might support your hypothesis, refute it, or reveal complications. Maybe the distinction between speech and narrative isn't cleanly encoded. Maybe you need to control for genre or book.
+
+```
+You: The counts seem off. Can you show me some examples
+     where wayyiqtol appears in what's marked as direct speech?
+```
+
+Manual review of edge cases often reveals coding decisions or corpus artifacts that affect interpretation.
+
+### Step 5: Document the Method
+
+```
+You: Summarize the queries we used and what we found.
+     Include the search templates.
+```
+
+This creates a reproducible record—something you can share, revise, or return to later.
+
+## The Comparative Workflow
+
+For analyzing parallel corpora or cross-textual patterns.
+
+### Establishing Correspondence
+
+With multiple corpora loaded, start by understanding their relationship:
+
+```
+You: How do the BHSA and LXX corpora relate?
+     Are there alignment features?
+```
+
+Some corpus pairs have explicit alignment; others require matching by section reference.
+
+### Parallel Queries
+
+Run equivalent searches in each corpus:
+
+```
+You: Search for Hebrew participles functioning as
+     substantives in Genesis 1-3.
+
+You: Now find the Greek renderings in the LXX
+     for those same verses.
+```
+
+The agent can help correlate results, though alignment precision depends on how the corpora are structured.
+
+### Pattern Detection
+
+```
+You: Compare the Greek translation patterns. Are Hebrew
+     participles consistently rendered with one Greek form?
+```
+
+This is where the agent's ability to process and summarize large result sets becomes valuable. Manual comparison of hundreds of parallel passages would take days; an AI agent can identify patterns in seconds.
+
+<Callout type="note">
+Comparative analysis is only as good as the underlying corpus alignment. Verify a sample of matches manually before trusting aggregate patterns.
+</Callout>
+
+## Best Practices
+
+### Start Narrow, Then Expand
+
+Begin with constrained searches—one book, one chapter, specific features. Validate your approach on manageable data before scaling up. A query that returns 50,000 results is hard to verify.
+
+### Use Statistics for Overview
+
+The `statistics` return type gives you feature distributions without returning all individual results:
+
+```
+You: Search for all verbs in the corpus and give me
+     a statistical breakdown by tense and stem.
+```
+
+This reveals patterns in the data structure without overwhelming context windows.
+
+### Verify Surprising Results
+
+When something unexpected appears, dig into specific examples:
+
+```
+You: That count seems high. Show me 10 specific examples
+     of these matches.
+```
+
+Corpus data has quirks—encoding decisions, boundary cases, annotation inconsistencies. Verification catches these before they become false findings.
+
+### Iterate on Queries
+
+First attempts rarely capture exactly what you want. Expect to refine:
+
+```
+You: That's close, but it's matching X when I really want Y.
+     Can we exclude cases where...?
+```
+
+Query development is a dialogue. The agent can suggest modifications; you provide the linguistic judgment about what counts.
+
+### Export for External Analysis
+
+For serious statistical work, export your data:
+
+```
+You: Give me these results in a format I can paste
+     into a spreadsheet.
+```
+
+AI agents with Context-Fabric are good for exploration and pattern identification. Complex statistical modeling deserves specialized tools.

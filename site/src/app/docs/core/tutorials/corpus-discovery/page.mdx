@@ -1,0 +1,181 @@
+# Corpus Discovery
+
+Every corpus is different. BHSA has Hebrew morphology. The Greek New Testament has discourse features. The Dead Sea Scrolls have manuscript metadata. Before you can query a corpus effectively, you need to know what's in it.
+
+Context-Fabric provides introspection functions that let you explore any corpus programmatically. These same functions power the MCP server's discovery tools.
+
+## The describe Module
+
+Import the discovery functions:
+
+```python
+from cfabric import Fabric
+from cfabric.describe import (
+    describe_corpus,
+    describe_corpus_overview,
+    list_features,
+    describe_feature,
+    describe_text_formats,
+)
+
+CF = Fabric('/path/to/corpus')
+api = CF.loadAll()
+```
+
+## Corpus Overview
+
+Start with the big picture. What node types exist? What's the section structure?
+
+```python
+overview = describe_corpus_overview(api, "BHSA")
+
+# Node types and counts
+for nt in overview.node_types:
+    print(f"{nt['type']}: {nt['count']:,} nodes")
+    if nt['is_slot_type']:
+        print("  (slot type)")
+
+# Section hierarchy
+print(f"Sections: {overview.sections['levels']}")
+```
+
+Output for BHSA:
+```
+word: 426,584 nodes
+  (slot type)
+phrase: 253,203 nodes
+clause: 88,131 nodes
+sentence: 63,717 nodes
+verse: 23,213 nodes
+chapter: 929 nodes
+book: 39 nodes
+Sections: ['book', 'chapter', 'verse']
+```
+
+## Listing Features
+
+Get a catalog of available features:
+
+```python
+# All features
+all_features = list_features(api)
+print(f"Total features: {len(all_features)}")
+
+# Just node features
+node_features = list_features(api, kind="node")
+
+# Just edge features
+edge_features = list_features(api, kind="edge")
+
+# Features for a specific node type
+word_features = list_features(api, node_types=["word"])
+print(f"Word features: {len(word_features)}")
+```
+
+Each feature entry includes:
+- `name` — The feature name (e.g., `sp`, `lex`, `function`)
+- `kind` — Whether it's a `node` or `edge` feature
+- `value_type` — The data type (`str`, `int`)
+- `description` — What the feature represents
+
+```python
+for f in word_features[:5]:
+    print(f"{f.name}: {f.description}")
+```
+
+## Feature Details
+
+Get detailed information about a specific feature, including sample values:
+
+```python
+sp_info = describe_feature(api, "sp", sample_limit=10)
+
+print(f"Feature: {sp_info.name}")
+print(f"Kind: {sp_info.kind}")
+print(f"Description: {sp_info.description}")
+print(f"Unique values: {sp_info.unique_values}")
+
+print("\nTop values by frequency:")
+for value, count in sp_info.sample_values:
+    print(f"  {value}: {count:,}")
+```
+
+Output:
+```
+Feature: sp
+Kind: node
+Description: part of speech
+Unique values: 15
+
+Top values by frequency:
+  subs: 125,558
+  prep: 56,601
+  verb: 50,942
+  conj: 45,161
+  art: 30,386
+  ...
+```
+
+This tells you exactly what values to use in your queries.
+
+## Text Formats
+
+Understand how text is encoded before writing lexical queries:
+
+```python
+text_info = describe_text_formats(api)
+
+for fmt in text_info.formats:
+    print(f"\n{fmt.name}:")
+    print(f"  Original: {fmt.original_spec}")
+    print(f"  Transliteration: {fmt.transliteration_spec}")
+    print(f"  Sample characters: {fmt.unique_characters}")
+
+    # Show some samples
+    for sample in fmt.samples[:3]:
+        print(f"    {sample.original} → {sample.transliterated}")
+```
+
+This is essential for corpora with non-Latin scripts. You'll see exactly how Hebrew, Greek, or Arabic characters are transliterated.
+
+## Full Corpus Description
+
+For a complete picture, use `describe_corpus`:
+
+```python
+full = describe_corpus(api, "BHSA")
+
+# Everything from overview
+print(f"Node types: {len(full.node_types)}")
+print(f"Sections: {full.sections}")
+
+# Plus text representations
+print(f"Text formats: {len(full.text_representations.formats)}")
+```
+
+## Why This Matters
+
+Different corpora have different annotations:
+
+| Corpus | Example Features |
+|--------|------------------|
+| BHSA | `sp`, `lex`, `vs`, `vt`, `function`, `typ` |
+| Greek NT | `lemma`, `mood`, `case`, `discourse` |
+| Dead Sea Scrolls | `scroll`, `fragment`, `line` |
+| Quran | `lemma`, `root`, `pos` |
+
+A query that works on BHSA won't work on the Greek NT if it uses BHSA-specific features like `vs` (verbal stem). Always check what features are available before writing queries.
+
+## Discovery Workflow
+
+1. **Load the corpus** with `Fabric` and `loadAll()`
+2. **Get the overview** with `describe_corpus_overview()` to see node types
+3. **List features** with `list_features(node_types=["word"])` to see word-level annotations
+4. **Examine specific features** with `describe_feature()` to see valid values
+5. **Check text encoding** with `describe_text_formats()` before lexical searches
+
+Now you're ready to access features directly.
+
+## Next Steps
+
+[Continue to Feature Access](/docs/core/tutorials/feature-access)

@@ -1,0 +1,288 @@
+# Working with BHSA
+
+The Biblia Hebraica Stuttgartensia Amstelodamensis (BHSA) is a richly annotated corpus of the Hebrew Bible. Every word carries morphological information. Every phrase has syntactic function labels. Every clause encodes its type and constituent structure. This makes it exceptionally powerful for computational analysis—if you know what features to use.
+
+## What BHSA Contains
+
+BHSA covers the complete Hebrew Bible (39 books, 23,213 verses, 426,584 words) with multiple annotation layers:
+
+- **Morphological**: Part of speech, gender, number, person, verbal stem, verbal tense
+- **Lexical**: Lexemes (dictionary forms), glosses
+- **Syntactic**: Phrase types, phrase functions, clause types, clause relations
+- **Textual**: Multiple text representations (consonantal, vocalized, phonological)
+
+The corpus was developed at the Eep Talstra Centre for Bible and Computer (ETCBC) and represents decades of scholarly annotation work.
+
+## Loading BHSA
+
+```python
+import cfabric
+
+CF = cfabric.Fabric('/path/to/bhsa')
+api = CF.loadAll()
+api.makeAvailableIn(globals())
+```
+
+## Key Word Features
+
+| Feature | Description | Example Values |
+|---------|-------------|----------------|
+| `sp` | Part of speech | verb, subs, prep, conj, art, nmpr, advb |
+| `lex` | Lexeme (dictionary form) | >MR/, MLK/, HLK/ |
+| `gn` | Gender | m (masculine), f (feminine), NA |
+| `nu` | Number | sg (singular), pl (plural), du (dual) |
+| `ps` | Person | p1, p2, p3, NA |
+| `vs` | Verbal stem | qal, piel, hiphil, niphal, etc. |
+| `vt` | Verbal tense | perf, impf, wayq, ptcp, infc, impv |
+| `st` | State | c (construct), a (absolute) |
+
+<Callout type="note">
+The `lex` feature uses a transliteration scheme. The trailing slash marks proper lexeme entries. Common roots: `>MR/` (say), `HLK/` (walk), `MLK/` (king), `BN/` (son), `>LH/` (god).
+</Callout>
+
+For complete feature documentation, see the [BHSA Feature Guide](https://etcbc.github.io/bhsa/features/0_home/).
+
+## Key Phrase Features
+
+| Feature | Description | Example Values |
+|---------|-------------|----------------|
+| `function` | Syntactic function | Subj, Pred, Objc, Cmpl, Adju, Time, Loca |
+| `typ` | Phrase type | NP (noun phrase), VP (verb phrase), PP (prep phrase) |
+| `rela` | Relation to parent | NA, Appo, Para, Attr |
+
+## Key Clause Features
+
+| Feature | Description | Example Values |
+|---------|-------------|----------------|
+| `typ` | Clause type | xQtX, WayX, NmCl, AjCl, etc. |
+| `rela` | Relation to parent | NA, Attr, Objc, Adju, etc. |
+| `kind` | Clause kind | NC (nominal), VC (verbal) |
+
+<Callout type="info">
+Clause type codes encode word order. `xQtX` means an element (x) precedes a Qatal verb (Qt) precedes another element (X). `WayX` means a Wayyiqtol verb precedes other elements. These patterns are fundamental to Hebrew clause structure.
+</Callout>
+
+## Common Query Patterns
+
+### Finding All Occurrences of a Lexeme
+
+Where does the word for "say" appear?
+
+```python
+results = S.search('word lex=>MR/')
+print(f"Found {len(results)} occurrences")
+```
+
+Want only the verb forms (excluding the noun "word/thing")?
+
+```python
+results = S.search('word lex=>MR/ sp=verb')
+```
+
+### Subject-Verb Agreement
+
+Find clauses where a masculine plural subject precedes its verb:
+
+```python
+results = S.search('''
+clause
+  phrase function=Subj
+    word sp=subs gn=m nu=pl
+  > phrase function=Pred
+    word sp=verb
+''')
+
+for clause, subj_p, subj_w, pred_p, verb in results:
+    print(f"{T.sectionFromNode(clause)}: {T.text(clause)[:50]}...")
+```
+
+### Wayyiqtol Narrative Chains
+
+The wayyiqtol (consecutive imperfect) is the backbone of Hebrew narrative. Find all instances:
+
+```python
+wayq_verbs = S.search('word sp=verb vt=wayq')
+print(f"Found {len(wayq_verbs)} wayyiqtol forms")
+```
+
+Find clauses containing wayyiqtol verbs in the predicate:
+
+```python
+results = S.search('''
+clause
+  phrase function=Pred
+    word sp=verb vt=wayq
+''')
+```
+
+Note: In BHSA, the waw conjunction is encoded as a separate word, so wayyiqtol verbs are not technically clause-initial—the conjunction is.
+
+### Construct Chains (Genitives)
+
+Hebrew expresses possession through construct chains. Find noun + noun constructs:
+
+```python
+results = S.search('''
+phrase typ=NP
+  word sp=subs st=c
+  :> word sp=subs st=a
+''')
+
+for phrase, construct, absolute in results:
+    print(f"{F.lex.v(construct)} + {F.lex.v(absolute)}")
+```
+
+The `st=c` marks construct state (the possessed), `st=a` marks absolute state (the possessor).
+
+### Divine Name in Different Contexts
+
+Where is YHWH the subject of a clause?
+
+```python
+results = S.search('''
+clause
+  phrase function=Subj
+    word lex=JHWH/
+''')
+print(f"YHWH as subject: {len(results)} times")
+```
+
+Where is YHWH in a vocative (direct address)?
+
+```python
+results = S.search('''
+clause
+  phrase function=Voct
+    word lex=JHWH/
+''')
+```
+
+### Infinitive Constructs with Prepositions
+
+Hebrew uses infinitive constructs with prepositions for temporal and purpose clauses. Find "to say" constructions:
+
+```python
+results = S.search('''
+phrase
+  word sp=prep
+  word sp=verb vt=infc lex=>MR[
+''')
+```
+
+Note: The lexeme for "say" in BHSA is `>MR[` (with bracket suffix indicating a verb root).
+
+### Questions
+
+Find interrogative clauses starting with the interrogative he particle:
+
+```python
+results = S.search('''
+c:clause
+w:word sp=inrg lex=H=
+c =: w
+''')
+```
+
+Or find all clause-initial interrogatives:
+
+```python
+results = S.search('''
+c:clause
+w:word sp=inrg
+c =: w
+''')
+```
+
+### Participles as Predicates
+
+Participial predicates are characteristic of certain genres. In BHSA, these are typically tagged as `PreC` (predicate complement):
+
+```python
+results = S.search('''
+clause
+  phrase function=PreC
+    word vt=ptca
+''')
+```
+
+Note: `ptca` is the active participle; `ptcp` is the passive participle.
+
+## Analyzing Distributions
+
+BHSA's rich annotation enables sophisticated distributional analysis.
+
+### Verbal Stem Distribution
+
+Count verbs by stem:
+
+```python
+stem_counts = {}
+for word in F.sp.s('verb'):
+    stem = F.vs.v(word)
+    stem_counts[stem] = stem_counts.get(stem, 0) + 1
+
+for stem, count in sorted(stem_counts.items(), key=lambda x: -x[1]):
+    print(f"{stem}: {count}")
+```
+
+### Distribution by Book
+
+Analyze patterns across different books:
+
+```python
+# Count wayyiqtol by book
+book_counts = {}
+for result in S.search('word sp=verb vt=wayq'):
+    word = result[0]
+    book = T.sectionFromNode(word)[0]
+    book_counts[book] = book_counts.get(book, 0) + 1
+
+for book, count in sorted(book_counts.items(), key=lambda x: -x[1])[:10]:
+    print(f"{book}: {count}")
+```
+
+## Working with Sections
+
+BHSA organizes text in a three-level hierarchy: book, chapter, verse.
+
+### Getting Section References
+
+```python
+word = 1  # First word
+section = T.sectionFromNode(word)
+print(section)  # ('Genesis', 1, 1)
+```
+
+### Navigating by Section
+
+```python
+# Get all words in Genesis 1:1
+genesis_1_1 = ...  # Node for Genesis 1:1
+words = L.d(genesis_1_1, otype='word')
+print(' '.join(T.text(w) for w in words))
+```
+
+## Tips for Hebrew Bible Research
+
+**Start with counts.** Before deep analysis, check your result set size:
+
+```python
+results = S.search('word sp=verb')
+print(f"Found {len(results)} verbs")
+```
+
+A query matching 50,000 clauses needs different treatment than one matching 50.
+
+**Mind the encoding.** Hebrew characters in BHSA use ETCBC transliteration (e.g., `>` is aleph, `<` is ayin, `C` is shin/sin). See the [ETCBC transcription table](https://annotation.github.io/text-fabric/tf/writing/hebrew.html) for the complete character mapping.
+
+**Leverage hierarchy.** Hebrew syntax is hierarchical: words → phrases → clauses → sentences. Your queries should mirror this when appropriate.
+
+**Compare across books.** Genre differences (narrative, law, poetry, prophecy, wisdom) appear in clause structure, verbal patterns, and lexical choices.
+
+## Further Resources
+
+- [BHSA Feature Documentation](https://etcbc.github.io/bhsa/features/0_home/) — Complete feature reference
+- [ETCBC Documentation](https://etcbc.github.io/bhsa/) — Full BHSA corpus documentation
+- [Text-Fabric](https://annotation.github.io/text-fabric/) — The underlying corpus framework
+
+You now have the foundation for serious computational analysis of the Hebrew Bible. The corpus is deep, the features are rich, and the queries are powerful. What patterns will you find?

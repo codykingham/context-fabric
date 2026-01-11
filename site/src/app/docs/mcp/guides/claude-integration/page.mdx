@@ -1,0 +1,141 @@
+# Claude Integration
+
+Configure Claude Desktop or Claude Code to connect to your Context-Fabric MCP server.
+
+## Claude Desktop
+
+Claude Desktop uses a JSON configuration file. The location depends on your OS:
+
+| OS | Config Path |
+|----|-------------|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Linux | `~/.config/Claude/claude_desktop_config.json` |
+
+### Basic Configuration
+
+Add Context-Fabric to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "context-fabric": {
+      "command": "cfabric-mcp",
+      "args": ["--corpus", "/path/to/your/corpus"]
+    }
+  }
+}
+```
+
+### Multiple Corpora
+
+```json
+{
+  "mcpServers": {
+    "context-fabric": {
+      "command": "cfabric-mcp",
+      "args": [
+        "--corpus", "/path/to/bhsa",
+        "--corpus", "/path/to/lxx",
+        "--corpus", "/path/to/dss",
+        "--default", "bhsa"
+      ]
+    }
+  }
+}
+```
+
+<Callout type="warning">
+Use absolute paths. The MCP server runs in a different working directory than you might expect.
+</Callout>
+
+### Virtual Environment
+
+If Context-Fabric is installed in a virtual environment:
+
+```json
+{
+  "mcpServers": {
+    "context-fabric": {
+      "command": "/path/to/venv/bin/cfabric-mcp",
+      "args": ["--corpus", "/path/to/corpus"]
+    }
+  }
+}
+```
+
+On Windows:
+
+```json
+{
+  "mcpServers": {
+    "context-fabric": {
+      "command": "C:\\path\\to\\venv\\Scripts\\cfabric-mcp.exe",
+      "args": ["--corpus", "C:\\path\\to\\corpus"]
+    }
+  }
+}
+```
+
+### Verify Connection
+
+1. Restart Claude Desktop completely (quit and reopen)
+2. Start a new conversation
+3. Ask: "What corpora do you have access to?"
+
+If connected, Claude will list the available corpora.
+
+<Callout type="tip">
+Quick test: Ask Claude "Search for all nouns in Genesis 1:1". If you get actual search results with node IDs and feature values, the connection works.
+</Callout>
+
+## Claude Code (CLI)
+
+Claude Code automatically discovers MCP servers from your Claude Desktop configuration. If you've configured Claude Desktop, Claude Code will have access to the same servers.
+
+For project-specific configuration, add to your `.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "context-fabric": {
+      "command": "cfabric-mcp",
+      "args": ["--corpus", "/path/to/corpus"]
+    }
+  }
+}
+```
+
+## Agentic Patterns
+
+Claude works best with Context-Fabric when given clear research objectives. The agent can then autonomously:
+
+1. **Discover structure** — Call `describe_corpus` and `list_features` to understand what's available
+2. **Explore encoding** — Use `get_text_formats` before constructing lexical queries
+3. **Iterate on queries** — Build searches incrementally, checking counts before fetching full results
+4. **Analyze patterns** — Use `return_type: "statistics"` to aggregate feature distributions
+
+### Example: Research Task
+
+**Prompt**: "Analyze the distribution of verb tenses in prophetic vs narrative discourse in the Hebrew Bible"
+
+Claude will autonomously:
+- Discover relevant features (`vt` for verb tense, `typ` for clause type)
+- Construct appropriate search templates
+- Run statistical aggregations
+- Report findings with supporting data
+
+### Tips for Effective Prompts
+
+**Be specific about scope**:
+> "Search for qatal verbs following wayyiqtol chains in Genesis 1-11"
+
+**Request the query, not just results**:
+> "What search template would find all construct chains in Psalms?"
+
+**Ask for explanations**:
+> "Run that search and explain what each part of the template means"
+
+---
+
+Next: [ChatGPT Integration](/docs/mcp/guides/chatgpt-integration)

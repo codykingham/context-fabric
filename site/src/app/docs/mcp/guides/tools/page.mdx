@@ -1,0 +1,444 @@
+# MCP Tools Reference
+
+Complete reference for all Context-Fabric MCP tools. Examples use the BHSA (Biblia Hebraica Stuttgartensia Amstelodamensis) corpus.
+
+<Callout type="warning">
+The MCP tools are under active development. Tool signatures and output formats may change between releases. Some features have known limitations—check the [GitHub issues](https://github.com/context-fabric/context-fabric/issues) for current status.
+</Callout>
+
+## Corpus Management
+
+### list_corpora
+
+Lists all loaded corpora and identifies the current default.
+
+```json
+// Request
+{ "tool": "list_corpora" }
+
+// Response
+{
+  "corpora": ["bhsa", "lxx", "dss"],
+  "current": "bhsa"
+}
+```
+
+### describe_corpus
+
+Returns the structural overview: node types, counts, and section hierarchy.
+
+```json
+// Request
+{ "tool": "describe_corpus" }
+
+// Response
+{
+  "name": "bhsa",
+  "node_types": [
+    { "type": "book", "count": 39, "is_slot_type": false },
+    { "type": "chapter", "count": 929, "is_slot_type": false },
+    { "type": "verse", "count": 23213, "is_slot_type": false },
+    { "type": "sentence", "count": 63717, "is_slot_type": false },
+    { "type": "clause", "count": 88131, "is_slot_type": false },
+    { "type": "phrase", "count": 253203, "is_slot_type": false },
+    { "type": "word", "count": 426590, "is_slot_type": true }
+  ],
+  "sections": {
+    "levels": ["book", "chapter", "verse"]
+  }
+}
+```
+
+The `is_slot_type: true` indicates the atomic unit (words in this corpus).
+
+## Feature Discovery
+
+### list_features
+
+Browse available features, optionally filtered by node type.
+
+```json
+// Request
+{ "tool": "list_features", "node_types": ["word"] }
+
+// Response (truncated)
+[
+  { "name": "sp", "kind": "node", "value_type": "str", "description": "part-of-speech" },
+  { "name": "lex", "kind": "node", "value_type": "str", "description": "lexeme" },
+  { "name": "vt", "kind": "node", "value_type": "str", "description": "verbal tense" },
+  { "name": "vs", "kind": "node", "value_type": "str", "description": "verbal stem" },
+  { "name": "ps", "kind": "node", "value_type": "str", "description": "person" },
+  { "name": "nu", "kind": "node", "value_type": "str", "description": "number" },
+  { "name": "gn", "kind": "node", "value_type": "str", "description": "gender" }
+]
+```
+
+### describe_feature
+
+Get detailed information about a feature including sample values with frequency counts.
+
+```json
+// Request
+{ "tool": "describe_feature", "feature": "sp", "sample_limit": 10 }
+
+// Response
+{
+  "name": "sp",
+  "kind": "node",
+  "value_type": "str",
+  "description": "part-of-speech (art; verb; subs; nmpr, ...)",
+  "node_types": ["lex", "word"],
+  "unique_values": 14,
+  "sample_values": [
+    { "value": "subs", "count": 125583 },
+    { "value": "verb", "count": 75451 },
+    { "value": "prep", "count": 73298 },
+    { "value": "conj", "count": 62737 },
+    { "value": "nmpr", "count": 35607 },
+    { "value": "art", "count": 30387 },
+    { "value": "adjv", "count": 10141 },
+    { "value": "nega", "count": 6059 },
+    { "value": "prps", "count": 5035 },
+    { "value": "advb", "count": 4603 }
+  ]
+}
+```
+
+### get_text_formats
+
+Shows text encoding options with sample pairs. Essential before constructing lexical searches.
+
+```json
+// Request
+{ "tool": "get_text_formats" }
+
+// Response
+{
+  "formats": [
+    {
+      "name": "text-orig-full",
+      "description": "Hebrew script with full pointing",
+      "samples": ["בְּרֵאשִׁית", "אֱלֹהִים", "הַשָּׁמַיִם"]
+    },
+    {
+      "name": "text-trans-plain",
+      "description": "Transliteration without diacritics",
+      "samples": ["BR>CJT", ">LHJM", "HCMJM"]
+    }
+  ]
+}
+```
+
+<Callout type="tip">
+Always call `get_text_formats` before writing searches that match on lexeme or surface text. The encoding may differ from what you expect.
+</Callout>
+
+## Search
+
+### search
+
+The primary query tool. Supports multiple return types for different use cases.
+
+#### Count Only
+
+Get the total matches without retrieving data:
+
+```json
+// Request
+{ "tool": "search", "template": "word sp=verb vt=perf", "return_type": "count" }
+
+// Response
+{
+  "total_count": 10000,
+  "template": "word sp=verb vt=perf"
+}
+```
+
+#### Paginated Results
+
+Get actual matches with section references:
+
+```json
+// Request
+{
+  "tool": "search",
+  "template": "word sp=verb vt=perf",
+  "return_type": "results",
+  "limit": 5
+}
+
+// Response
+{
+  "results": [
+    [{ "node": 3, "otype": "word", "text": "בָּרָא ", "section_ref": "Genesis 1:1" }],
+    [{ "node": 15, "otype": "word", "text": "הָיְתָה ", "section_ref": "Genesis 1:2" }],
+    [{ "node": 47, "otype": "word", "text": "טֹוב ", "section_ref": "Genesis 1:4" }],
+    [{ "node": 69, "otype": "word", "text": "קָרָא ", "section_ref": "Genesis 1:5" }],
+    [{ "node": 172, "otype": "word", "text": "קָרָא ", "section_ref": "Genesis 1:10" }]
+  ],
+  "total_count": 10000,
+  "cursor": {
+    "id": "b625b08f-a738-4936-9d4b-db523c946656",
+    "offset": 0,
+    "limit": 5,
+    "has_more": true,
+    "expires_at": 1768108523
+  }
+}
+```
+
+#### Statistics
+
+Get feature distributions across matches:
+
+```json
+// Request
+{
+  "tool": "search",
+  "template": "word sp=verb vt=perf",
+  "return_type": "statistics",
+  "aggregate_features": ["lex", "ps", "nu"],
+  "top_n": 5
+}
+
+// Response
+{
+  "total_count": 10000,
+  "nodes": {
+    "0_word": {
+      "type": "word",
+      "count": 10000,
+      "distributions": {
+        "lex": [
+          { "value": "HJH[", "count": 760 },
+          { "value": "<FH[", "count": 588 },
+          { "value": "NTN[", "count": 432 },
+          { "value": ">MR[", "count": 396 },
+          { "value": "BW>[", "count": 373 }
+        ],
+        "ps": [
+          { "value": "p3", "count": 7027 },
+          { "value": "p2", "count": 1765 },
+          { "value": "p1", "count": 1208 }
+        ],
+        "nu": [
+          { "value": "sg", "count": 7672 },
+          { "value": "pl", "count": 2328 }
+        ]
+      }
+    }
+  }
+}
+```
+
+### search_continue
+
+Page through results using the cursor from a previous search:
+
+```json
+// Request
+{
+  "tool": "search_continue",
+  "cursor_id": "b625b08f-a738-4936-9d4b-db523c946656",
+  "offset": 5,
+  "limit": 5
+}
+
+// Response
+{
+  "results": [...],
+  "cursor": {
+    "id": "b625b08f-a738-4936-9d4b-db523c946656",
+    "offset": 5,
+    "limit": 5,
+    "has_more": true
+  }
+}
+```
+
+<Callout type="warning">
+Cursors expire after 5 minutes. For long-running analysis, complete pagination promptly or re-run the search.
+</Callout>
+
+### search_syntax_guide
+
+Get documentation on search template syntax. Call without arguments for an overview, or with a section name for details.
+
+```json
+// Request
+{ "tool": "search_syntax_guide" }
+
+// Response
+{
+  "summary": "Templates: node_type feature=value. Indentation=containment. Relations: < > <: >: for ordering.",
+  "sections": ["basics", "structure", "relations", "quantifiers", "examples"]
+}
+```
+
+#### Section: basics
+
+```json
+// Request
+{ "tool": "search_syntax_guide", "section": "basics" }
+```
+
+```
+## Basic Syntax
+
+### Node Patterns
+node_type                    # Match any node of this type
+node_type feature=value      # Match with exact feature value
+node_type feature~regex      # Match with regex pattern
+node_type feature#regex      # Match with case-insensitive regex
+node_type feature<value      # Less than (numeric)
+node_type feature>value      # Greater than (numeric)
+
+### Multiple Conditions
+word sp=verb tense=past      # AND: both conditions must match
+
+### Variables (Capturing)
+word sp=verb                 # Anonymous match
+w:word sp=verb               # Named match (capture as 'w')
+```
+
+#### Section: structure
+
+```
+## Structure (Indentation)
+
+Indentation defines containment:
+
+clause                       # Find a clause
+  phrase function=subject    # containing a subject phrase
+    word sp=noun             # containing a noun
+```
+
+#### Section: relations
+
+```
+## Relations
+
+### Default Relations
+- Indented items are contained by their parent (`:` relation)
+- Items at same level follow each other in order
+
+### Explicit Relations
+clause
+  word sp=verb
+  < word sp=noun             # noun comes BEFORE verb
+  > word sp=adj              # adjective comes AFTER verb
+  <: word sp=prep            # preposition immediately before verb
+  >: word sp=adv             # adverb immediately after verb
+
+### Relation Operators
+- `<` - comes before
+- `>` - comes after
+- `<:` - immediately before (adjacent)
+- `>:` - immediately after (adjacent)
+- `<<` - comes before (same level)
+- `>>` - comes after (same level)
+- `:` - is contained in
+- `::` - is directly contained in (parent-child)
+- `[[` - starts at same position
+- `]]` - ends at same position
+- `=:` - same slots (co-extensive)
+- `==` - same node
+```
+
+#### Section: examples
+
+```
+## Examples
+
+### Find all verbs:
+word sp=verb
+
+### Find verbs with their objects:
+clause
+  phrase function=predicate
+    word sp=verb
+  phrase function=object
+
+### Find adjacent words:
+word
+<: word                      # Two adjacent words
+
+### Find a word and its containing clause:
+clause
+  word lex=king
+```
+
+## Passage Retrieval
+
+### get_passages
+
+Retrieve text by section reference:
+
+```json
+// Request
+{
+  "tool": "get_passages",
+  "sections": [["Genesis", 1, 1], ["Genesis", 1, 2]]
+}
+
+// Response
+{
+  "passages": [
+    {
+      "node": 1414389,
+      "otype": "verse",
+      "text": "בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ׃ ",
+      "section_ref": "Genesis 1:1"
+    },
+    {
+      "node": 1414390,
+      "otype": "verse",
+      "text": "וְהָאָרֶץ הָיְתָה תֹהוּ וָבֹהוּ...",
+      "section_ref": "Genesis 1:2"
+    }
+  ],
+  "total": 2,
+  "found": 2
+}
+```
+
+Section references support multiple languages:
+
+```json
+// Hebrew book names
+{ "sections": [["בראשית", 1, 1]], "lang": "he" }
+
+// German book names
+{ "sections": [["1. Mose", 1, 1]], "lang": "de" }
+```
+
+### get_node_features
+
+Get feature values for specific nodes:
+
+```json
+// Request
+{
+  "tool": "get_node_features",
+  "nodes": [3, 15, 47],
+  "features": ["sp", "lex", "vt"]
+}
+
+// Response
+{
+  "3": { "sp": "verb", "lex": "BR>[", "vt": "perf" },
+  "15": { "sp": "verb", "lex": "HJH[", "vt": "perf" },
+  "47": { "sp": "adjv", "lex": "TWB[", "vt": null }
+}
+```
+
+## Workflow Recommendations
+
+These patterns help agents use the tools effectively:
+
+1. **Start with structure**: Agent should call `describe_corpus` to understand node types and hierarchy
+2. **Discover features**: Agent should use `list_features` filtered by node type, then `describe_feature` for details
+3. **Check encoding**: Agent should call `get_text_formats` before lexical searches
+4. **Count first**: Agent should use `return_type: "count"` before fetching full results
+5. **Use statistics**: Agent should aggregate with `return_type: "statistics"` for distributions
+6. **Paginate large results**: Agent should keep page sizes reasonable (50-100) and use cursors

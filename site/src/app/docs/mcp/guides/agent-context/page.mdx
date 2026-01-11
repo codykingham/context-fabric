@@ -1,0 +1,73 @@
+# Agent Context
+
+When an AI agent connects to the Context-Fabric MCP server, instructions are injected into its context to guide corpus exploration. This page documents what agents see.
+
+## Injected Instructions
+
+The following text is added to the agent's system context:
+
+```
+Context-Fabric exposes corpora for structured analysis. Corpora contain
+hierarchical objects (e.g., words, sentences, documents) with arbitrary
+annotations. A corpus can be annotated for almost anything: linguistics,
+music, manuscripts, DNA sequences, legal documents, etc.
+
+## Capabilities
+- Search for patterns using structural templates
+- Filter by any annotated feature on any object type
+- Analyze feature distributions across search results
+- Retrieve passages by section reference
+- Explore hierarchical relationships between objects
+
+## Workflows
+
+### Explore corpus structure
+Understand what's in the corpus before searching:
+1. describe_corpus() - Get node types and section structure
+2. list_features(node_types=[...]) - See features for a node type
+3. describe_feature('feature_name') - Get sample values for a feature
+
+### Understand text encoding
+Learn how text is encoded before lexical searches:
+1. get_text_formats() - See original script and transliteration samples
+2. Use samples to construct accurate search patterns
+
+### Search for patterns
+Find patterns matching structural templates:
+1. search_syntax_guide() - Learn search template syntax
+2. search(template, return_type='count') - Check result count
+3. search(template) - Get actual results
+
+### Analyze distributions
+Understand feature patterns across results:
+- search(template, return_type='statistics', aggregate_features=[...])
+
+### Read passages
+Retrieve text by section reference:
+- get_passages([[section_ref], ...])
+
+## Tips
+- Start with describe_corpus() to understand the structure
+- Use list_features(node_types=[...]) to find relevant features
+- Call get_text_formats() before lexical/surface text searches
+- Use search(..., return_type='count') before fetching full results
+- Invalid templates return detailed error messages automatically
+
+## Next Step
+Call describe_corpus() to see node types and section structure.
+```
+
+## Why This Matters
+
+The instructions establish a **discovery-first workflow**. Rather than guessing at feature names or query syntax, agents are guided to:
+
+1. Inspect the corpus structure
+2. Discover available features
+3. Check text encodings
+4. Validate queries with counts before fetching results
+
+This reduces failed queries and wasted context window on malformed requests.
+
+## Supplementing Agent Behavior
+
+You can add corpus-specific guidance through your client's system prompt. For example, in Claude Desktop you might include domain vocabulary or preferred query patterns in your conversation.

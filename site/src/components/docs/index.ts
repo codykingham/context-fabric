@@ -4,3 +4,8 @@ export { ClassDoc } from "./ClassDoc";
 export { MethodDoc } from "./MethodDoc";
 export { FunctionDoc } from "./FunctionDoc";
 export { DocstringContent } from "./DocstringContent";
+export { CodeBlock } from "./CodeBlock";
+export { CopyButton } from "./CopyButton";
+export { Callout } from "./Callout";
+export { CorporaTable } from "./CorporaTable";
+export { ScrollToTop } from "./ScrollToTop";

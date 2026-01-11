@@ -1,0 +1,153 @@
+# Loading Your First Corpus
+
+A corpus in Context-Fabric is a collection of `.tf` (Text-Fabric) files that encode text, annotations, and relationships as a graph. The canonical example is BHSA (Biblia Hebraica Stuttgartensia Amstelodamensis) — the Hebrew Bible with morphological, syntactic, and semantic annotations developed over decades at the Eep Talstra Centre for Bible and Computer.
+
+## Getting a Corpus
+
+Corpora are currently distributed via GitHub. Clone or download the repository for the corpus you want to use.
+
+```bash
+# Clone BHSA (about 1GB with full git history)
+git clone https://github.com/ETCBC/bhsa.git
+
+# Or download just the latest version
+git clone --depth 1 https://github.com/ETCBC/bhsa.git
+```
+
+See the [Corpus Index](/docs/corpora) for links to available corpora.
+
+<Callout type="info">
+A built-in downloader with Hugging Face integration is [on the roadmap](/docs/corpora/distribution). For now, download corpora directly from their GitHub repositories.
+</Callout>
+
+## Loading the Corpus
+
+With the corpus downloaded, loading is straightforward:
+
+```python
+CF = cfabric.Fabric(locations=path)
+api = CF.loadAll()
+```
+
+The `loadAll()` method loads every feature in the corpus. For large corpora, you might prefer to load specific features:
+
+```python
+# Load only what you need
+api = CF.load('sp lex gloss')
+```
+
+On first load, Context-Fabric compiles `.tf` files to a memory-mapped format (`.cfm`). Subsequent loads skip this step entirely — the compiled data maps directly into memory without deserialization.
+
+## The API Object
+
+After loading, the `api` object is your interface to the corpus. It provides several namespaces:
+
+| Namespace | Purpose |
+|-----------|---------|
+| `api.F` | **Features** — Access node features like part of speech, lexeme, gloss |
+| `api.E` | **Edges** — Access edge features encoding relationships |
+| `api.L` | **Locality** — Navigate up/down the containment hierarchy |
+| `api.T` | **Text** — Retrieve text representations |
+| `api.S` | **Search** — Query structural patterns |
+| `api.N` | **Nodes** — Walk nodes in canonical order |
+| `api.C` | **Computed** — Pre-computed data like node ordering and level structure |
+
+Each namespace exposes methods for interacting with the graph. Let's see a few in action.
+
+## First Queries
+
+### Walking Nodes
+
+Every node in the corpus has a unique integer ID. Slot nodes (the atomic text units, usually words) are numbered 1 through `maxSlot`. Higher-level nodes (phrases, clauses, sentences) have IDs above `maxSlot`.
+
+```python
+# Walk all nodes in canonical text order
+for node in api.N.walk():
+    node_type = api.F.otype.v(node)
+    print(f"Node {node}: {node_type}")
+    if node > 10:  # Just peek at the first few
+        break
+```
+
+### Accessing Features
+
+Features are annotations attached to nodes. In BHSA, words have features like `sp` (part of speech), `lex` (lexeme), and `gloss` (English meaning):
+
+```python
+# Get feature values for a word
+word = 1  # First word in the corpus
+print(f"Part of speech: {api.F.sp.v(word)}")
+print(f"Lexeme: {api.F.lex.v(word)}")
+print(f"Gloss: {api.F.gloss.v(word)}")
+```
+
+### Navigating Structure
+
+The `L` (Locality) API lets you move up and down the containment hierarchy:
+
+```python
+word = 1
+
+# What contains this word?
+containers = api.L.u(word)
+for container in containers:
+    print(f"Contained by: {api.F.otype.v(container)}")
+
+# What words does a verse contain?
+verse = api.L.u(word, otype='verse')[0]
+words_in_verse = api.L.d(verse, otype='word')
+print(f"Verse contains {len(words_in_verse)} words")
+```
+
+### Getting Text
+
+The `T` (Text) API reconstructs text from nodes:
+
+```python
+# Get the text of the first verse
+verse = api.L.u(1, otype='verse')[0]
+text = api.T.text(verse)
+print(text)
+```
+
+### Searching Patterns
+
+The `S` (Search) API finds structural patterns across the corpus:
+
+```python
+# Find all nouns in construct state
+results = api.S.search('''
+  word sp=subs st=c
+''')
+
+# Count them
+print(f"Found {len(list(results))} construct nouns")
+```
+
+Search templates can express complex structural relationships:
+
+```python
+# Find clauses containing both a subject phrase and an object phrase
+results = api.S.search('''
+  clause
+    phrase function=Subj
+    phrase function=Objc
+''')
+```
+
+## What Just Happened
+
+When you loaded BHSA, Context-Fabric:
+
+1. Loaded node type information (which integers are words, which are phrases, etc.)
+2. Loaded the slot containment map (which slots belong to which higher nodes)
+3. Loaded pre-computed navigation structures (level hierarchy, canonical ordering)
+4. Made all requested features available through `api.F`
+
+The result is a queryable graph of 1.4 million nodes encoding the complete morphological and syntactic analysis of the Hebrew Bible.
+
+## Next Steps
+
+Now that you can load a corpus and poke at it, let's learn how to systematically explore what's available:
+
+- [Exploring Corpus Structure](/docs/getting-started/basic-exploration) — Discover node types and features

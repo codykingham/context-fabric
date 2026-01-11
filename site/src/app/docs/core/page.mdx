@@ -1,0 +1,63 @@
+# Core Library
+
+The Context-Fabric core library (`context-fabric`) provides direct Python API access for corpus analysis. Use this when you're writing scripts, building applications, or need programmatic control over corpus operations.
+
+## When to Use Core
+
+- **Scripts and notebooks**: Batch analysis, data extraction, corpus processing
+- **Application development**: Building web services, APIs, or custom tools
+- **Performance-critical workflows**: Direct API access without MCP overhead
+- **Integration**: Embedding corpus analysis in larger Python applications
+
+## Installation
+
+```bash
+pip install context-fabric
+```
+
+## Quick Start
+
+```python
+import cfabric
+
+# Load a corpus
+CF = cfabric.Fabric('/path/to/corpus')
+api = CF.loadAll()
+
+# Hoist API members to globals for the familiar F, L, T, S pattern
+api.makeAvailableIn(globals())
+
+# Query the corpus
+results = S.search('''
+clause
+  phrase function=Pred
+    word sp=verb
+''')
+
+# Work with results
+for clause, phrase, word in results:
+    print(T.text(clause))
+```
+
+## The API
+
+Context-Fabric preserves 100% API compatibility with Text-Fabric:
+
+| API | Purpose | Example |
+|-----|---------|---------|
+| `F` | Node features | `F.sp.v(node)` |
+| `E` | Edge features | `E.parent.f(node)` |
+| `L` | Locality | `L.d(node, otype='word')` |
+| `T` | Text | `T.text(node)` |
+| `S` | Search | `S.search(query)` |
+| `N` | Nodes | `N.walk()` |
+
+## Tutorials
+
+- [Working with BHSA](/docs/tutorials/working-with-bhsa) - Hands-on examples with the Hebrew Bible corpus
+
+## Related
+
+- [Text-Fabric Compatibility](/docs/concepts/text-fabric-compat) - Migration guide from Text-Fabric
+- [Architecture](/docs/concepts/architecture) - Memory model and performance characteristics
+- [Graph Data Model](/docs/concepts/graph-model) - Understanding the underlying data structure

@@ -1,0 +1,209 @@
+# CFM Format
+
+CFM (Context-Fabric Memory-mapped) is a compiled binary format optimized for fast loading and multi-process access. When you first load a TF corpus, Context-Fabric automatically compiles it to CFM for subsequent use.
+
+## Why Compile?
+
+TF files are human-readable but require parsing on every load. CFM provides:
+
+- **Instant loading**: Memory-mapped NumPy arrays require no parsing
+- **Multi-process sharing**: Multiple processes access the same memory
+- **Efficient storage**: Sparse formats and integer indexing reduce size
+- **Computed indices**: Pre-built ordering and hierarchy for fast navigation
+
+## Directory Structure
+
+The compiled format lives in a `.cfm` subdirectory:
+
+```
+corpus/
+├── otype.tf
+├── oslots.tf
+├── word.tf
+├── ...
+└── .cfm/
+    └── 1/                        # Format version
+        ├── meta.json             # Corpus metadata
+        ├── warp/                 # Core structural features
+        │   ├── otype.npy
+        │   ├── otype_types.json
+        │   ├── oslots_indptr.npy
+        │   └── oslots_data.npy
+        ├── features/             # Node features
+        │   ├── word_strings.npy
+        │   ├── word_idx.npy
+        │   ├── word_meta.json
+        │   └── ...
+        ├── edges/                # Edge features
+        │   ├── parent_indptr.npy
+        │   ├── parent_data.npy
+        │   ├── parent_meta.json
+        │   └── ...
+        └── computed/             # Pre-computed indices
+            ├── levels.json
+            ├── order.npy
+            ├── rank.npy
+            └── ...
+```
+
+## Corpus Metadata
+
+The `meta.json` file contains corpus-level information:
+
+```json
+{
+  "cfm_version": "1",
+  "source": "bhsa",
+  "max_slot": 426584,
+  "max_node": 1446801,
+  "slot_type": "word",
+  "node_types": ["word", "phrase", "clause", "sentence", ...],
+  "features": {
+    "node": ["word", "pos", "lemma", ...],
+    "edge": ["parent", "mother", ...]
+  },
+  "created": "2026-01-08T14:31:07.736728+00:00"
+}
+```
+
+## Node Feature Storage
+
+### Integer Features
+
+Integer node features are stored as dense NumPy arrays:
+
+- **File**: `features/{name}.npy`
+- **Type**: `int32`
+- **Size**: One element per node
+- **Missing values**: Sentinel value `-1`
+
+```python
+# Access pattern
+value = array[node - 1]  # 1-indexed nodes → 0-indexed array
+if value != -1:
+    # Node has a value
+```
+
+### String Features
+
+String features use a **string pool** pattern—unique values stored once, referenced by index:
+
+- **`{name}_strings.npy`**: Array of unique string values
+- **`{name}_idx.npy`**: `uint32` indices into the string array
+
+```python
+# Access pattern
+idx = idx_array[node - 1]
+if idx != 0xFFFFFFFF:  # Not missing
+    value = strings_array[idx]
+```
+
+This is memory-efficient when many nodes share the same value (common for categorical features like part-of-speech).
+
+## Edge Feature Storage
+
+Edge features use **CSR (Compressed Sparse Row)** format, efficient for sparse graph data:
+
+### Edges Without Values
+
+- **`{name}_indptr.npy`**: Index pointers (`uint32`)
+- **`{name}_data.npy`**: Target node IDs (`uint32`)
+
+```python
+# Get all targets from source node n
+start = indptr[n]
+end = indptr[n + 1]
+targets = data[start:end]
+```
+
+### Edges With Values
+
+Additional files for valued edges:
+
+- **`{name}_indices.npy`**: Target node IDs
+- **`{name}_values.npy`**: Values parallel to indices
+- **`{name}_values_lookup.json`**: String value lookup (if string-valued)
+
+Integer edge values use sentinel `-2147483648` for missing values.
+
+### Inverse Edges
+
+Inverse edge mappings (target → sources) are stored with `_inv_` prefix:
+
+- `{name}_inv_indptr.npy`
+- `{name}_inv_data.npy`
+
+## Computed Indices
+
+Pre-computed structural data for fast navigation:
+
+### levels.json
+
+Node type hierarchy with statistics:
+
+```json
+[
+  {"type": "sentence", "avgSlots": 17.2, "minNode": 1200001, "maxNode": 1250000},
+  {"type": "clause", "avgSlots": 8.5, "minNode": 800001, "maxNode": 1200000},
+  {"type": "phrase", "avgSlots": 2.3, "minNode": 500001, "maxNode": 800000}
+]
+```
+
+### order.npy / rank.npy
+
+Canonical node ordering for consistent traversal:
+
+- **order**: Nodes in depth-first order
+- **rank**: Position of each node in the order
+
+These are inverses: `order[rank[n]] == n`
+
+### levUp / levDown
+
+CSR arrays for hierarchy navigation:
+
+- **levUp**: Embedder nodes (containers)
+- **levDown**: Embedded nodes (contents)
+
+### boundary_first / boundary_last
+
+CSR arrays mapping nodes to their slot boundaries for fast text extraction.
+
+## Memory Mapping
+
+All `.npy` files are memory-mapped with read-only access:
+
+```python
+array = np.load(path, mmap_mode='r')
+```
+
+Benefits:
+- **Zero-copy loading**: No data copied until accessed
+- **Shared memory**: Multiple processes share the same physical memory
+- **Lazy loading**: Only accessed pages are read from disk
+
+The one exception: string pool arrays (`_strings.npy`) are loaded directly because Python object arrays cannot be memory-mapped.
+
+## Automatic Compilation
+
+Context-Fabric handles compilation transparently:
+
+```python
+import cfabric
+
+# First load: compiles TF → CFM (may take a few seconds for large corpora)
+CF = cfabric.Fabric('/path/to/corpus')
+api = CF.loadAll()
+
+# Subsequent loads: instant (uses cached CFM)
+CF = cfabric.Fabric('/path/to/corpus')
+api = CF.loadAll()  # Nearly instantaneous
+```
+
+The `.cfm` directory can be safely deleted—it will be regenerated on next load.
+
+## Version Compatibility
+
+The format version (`cfm_version` in meta.json) tracks breaking changes. If Context-Fabric updates its format, it will recompile existing corpora automatically.
+
+Current version: `1`

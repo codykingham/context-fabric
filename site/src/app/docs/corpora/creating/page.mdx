@@ -1,0 +1,112 @@
+# Creating Corpora
+
+Context-Fabric works with any corpus in Text-Fabric format. This page covers how to create your own corpus from scratch or convert existing data.
+
+<Callout type="tip">
+Future releases of Context-Fabric may include AI-assisted corpus creation tools that can automatically generate TF files from common formats like plain text, XML, or spreadsheets. For now, the approaches below require some Python scripting.
+</Callout>
+
+## What You Need
+
+Every corpus requires three special files (the "WARP" features):
+
+| File | Purpose |
+|------|---------|
+| `otype.tf` | Defines node types (word, sentence, paragraph, etc.) |
+| `oslots.tf` | Maps non-slot nodes to their constituent slots |
+| `otext.tf` | Configures text rendering and section navigation |
+
+Plus any number of feature files for your annotations (part of speech, lemma, syntactic function, etc.).
+
+See [TF Format](/docs/file-formats/tf-format) for complete syntax documentation.
+
+## Conversion Approaches
+
+### From TEI XML
+
+The [tfbuilder](https://github.com/pthu/tfbuilder) tool converts TEI-encoded texts to Text-Fabric format. It handles common TEI structures like divisions, paragraphs, and inline annotations.
+
+```bash
+pip install tfbuilder
+```
+
+### From MQL (Emdros)
+
+If you have data in MQL format (from the Emdros database system), Text-Fabric provides [MQL conversion tools](https://annotation.github.io/text-fabric/tf/convert/mql.html).
+
+### From Custom Formats
+
+For other formats (CSV, JSON, plain text, etc.), use the **Walker API** to programmatically build a corpus. The walker lets you iterate through your source data and emit TF nodes and features.
+
+## The Walker API
+
+The walker pattern has three components:
+
+1. **Configuration** — Define your node types, slot type, and text formats
+2. **Director function** — Walk through your source data, creating nodes and assigning features
+3. **Output** — Walker validates the graph and writes `.tf` files
+
+### Basic Structure
+
+```python
+from tf.fabric import Fabric
+from tf.convert.walker import CV
+
+# Configuration
+cv = CV(Fabric(locations='output_dir'))
+
+cv.configure(
+    slotType='word',
+    otext={'fmt:text-orig-full': '{word} '},
+    generic={'author': 'Your Name'},
+)
+
+def director(cv):
+    # Walk through your source data
+    for paragraph in source_data:
+        # Create a paragraph node
+        para = cv.node('paragraph')
+
+        for word_text in paragraph.words:
+            # Create slot nodes (words)
+            slot = cv.slot()
+            cv.feature(slot, word=word_text)
+
+        # End the paragraph
+        cv.terminate(para)
+
+# Run the conversion
+cv.walk(director, 'corpus_name')
+```
+
+### Key Concepts
+
+**Slots** are the atomic text units (usually words or characters). Every other node type "contains" slots.
+
+**Embedders** are nodes that automatically contain subsequently created slots until explicitly terminated. When you call `cv.node('sentence')`, that sentence will contain all slots created until you call `cv.terminate(sentence)`.
+
+**Features** are assigned with `cv.feature(node, name=value)` for node features and `cv.edge(from_node, to_node, name=value)` for edge features.
+
+## Planning Your Corpus
+
+Before writing code, decide on:
+
+1. **Slot type** — What's your atomic unit? Words? Characters? Morphemes?
+
+2. **Node hierarchy** — What structural levels do you need? (document → chapter → paragraph → sentence → word)
+
+3. **Features** — What annotations will you store? Consider:
+   - Linguistic: lemma, part of speech, morphology
+   - Structural: chapter number, verse number
+   - Metadata: speaker, date, source
+
+4. **Section structure** — How will users navigate? (book/chapter/verse, document/paragraph, etc.)
+
+Refer to the [Graph Data Model](/docs/concepts/graph-model) for how these concepts map to the underlying structure.
+
+## Resources
+
+- [TF Format Reference](/docs/file-formats/tf-format) — Complete file format documentation
+- [Text-Fabric Walker API](https://annotation.github.io/text-fabric/tf/convert/walker.html) — Full API reference
+- [Text-Fabric Corpus Guide](https://annotation.github.io/text-fabric/tf/about/corpora.html) — Additional examples
+- [tfbuilder](https://github.com/pthu/tfbuilder) — TEI XML converter
