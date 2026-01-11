@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "context-fabric"
-version = "0.5.4"
+version = "0.5.5"
 description = "Graph-based corpus engine for annotated text with efficient traversal and search"
 readme = "README.md"
 license = {text = "MIT"}
@@ -50,7 +50,8 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Context-Fabric/context-fabric"
+Homepage = "https://context-fabric.ai"
+Documentation = "https://context-fabric.ai/docs"
 Repository = "https://github.com/Context-Fabric/context-fabric"
 Issues = "https://github.com/Context-Fabric/context-fabric/issues"
 

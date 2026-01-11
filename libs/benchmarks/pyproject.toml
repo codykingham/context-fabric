@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cfabric-benchmarks"
-version = "0.1.1"
+version = "0.1.2"
 description = "Comprehensive benchmarking suite for Context-Fabric vs Text-Fabric"
 readme = "README.md"
 license = {text = "MIT"}
@@ -18,6 +18,11 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.13",
 ]
+
+[project.urls]
+Homepage = "https://context-fabric.ai"
+Repository = "https://github.com/Context-Fabric/context-fabric"
+Issues = "https://github.com/Context-Fabric/context-fabric/issues"
 dependencies = [
     "context-fabric>=0.4.0",
     "text-fabric>=12.0",
