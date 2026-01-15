@@ -518,10 +518,14 @@ Examples:
         mcp.run(transport="stdio")
     elif transport == "sse":
         logger.info("SSE endpoint: http://%s:%d/sse", args.host, port)
-        mcp.run(transport="sse", host=args.host, port=port)
+        mcp.settings.host = args.host
+        mcp.settings.port = port
+        mcp.run(transport="sse")
     elif transport == "http":
         logger.info("HTTP endpoint: http://%s:%d/mcp", args.host, port)
-        mcp.run(transport="http", host=args.host, port=port)
+        mcp.settings.host = args.host
+        mcp.settings.port = port
+        mcp.run(transport="streamable-http")
 
 
 if __name__ == "__main__":
