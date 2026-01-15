@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.6] - 2026-01-15 ([ck])
+
+### Fixed
+- Windows path handling in `expandDir()`: absolute paths with drive letters (e.g., `D:/data/corpus`) were incorrectly treated as relative paths and prepended with current directory
+  - Now uses `os.path.isabs()` instead of `startswith("/")` for cross-platform absolute path detection
+  - Regression introduced in v0.5.1 when fixing hidden directory paths
+
 ## [0.5.5] - 2026-01-10 ([ck])
 
 ### Changed

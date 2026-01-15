@@ -108,7 +108,7 @@ def expandDir(obj: Any, dirName: str) -> str:
     elif dirName == ".":
         # Bare "." means current directory
         dirName = obj.curDir
-    elif not dirName.startswith("/"):
+    elif not os.path.isabs(dirName):
         # Relative path (including hidden dirs like .corpora) -> curDir/path
         dirName = obj.curDir + "/" + dirName
     return normpath(dirName)
