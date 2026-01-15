@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.7] - 2026-01-15 ([ck])
+
+### Fixed
+- `.cfm` loading now auto-loads `textFeatures` before initializing Text API (mirrors `.tf` behavior)
+  - Previously, `addText(api)` was called before section/format features were loaded, causing spurious "Node feature not loaded" errors
+  - `load("")` now works correctly with `.cfm` format, providing full `api.T` functionality
+- Logger propagation disabled to prevent duplicate log messages when used with libraries that configure root logging (e.g., FastMCP)
+
 ## [0.5.6] - 2026-01-15 ([ck])
 
 ### Fixed

@@ -71,6 +71,9 @@ def configure_logging(silent: str = SILENT_D) -> None:
         handler = logging.StreamHandler(sys.stderr)
         handler.setFormatter(logging.Formatter("%(message)s"))
         cfabric_logger.addHandler(handler)
+        # Prevent propagation to root logger (avoids duplicate messages
+        # when other libraries like FastMCP configure root logging)
+        cfabric_logger.propagate = False
 
     cfabric_logger.setLevel(level)
 

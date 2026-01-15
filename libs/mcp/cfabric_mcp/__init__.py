@@ -29,6 +29,9 @@ _handler.setFormatter(
 logger = logging.getLogger("cfabric_mcp")
 logger.addHandler(_handler)
 logger.setLevel(logging.INFO)
+# Prevent propagation to root logger (avoids duplicate messages
+# when FastMCP configures root logging via logging.basicConfig())
+logger.propagate = False
 
 from cfabric_mcp.server import mcp, main
 from cfabric_mcp.corpus_manager import corpus_manager, CorpusManager

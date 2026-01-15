@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - SSE and HTTP transports now start correctly (`mcp.run()` was receiving unsupported `host`/`port` arguments)
 - HTTP transport now uses correct FastMCP transport name (`streamable-http` instead of `http`)
+- Logger propagation disabled to prevent duplicate log messages (FastMCP configures root logging)
 
 ## [0.1.6] - 2026-01-14
 

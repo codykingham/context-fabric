@@ -592,10 +592,6 @@ class Fabric:
             loadableFeatures = allFeatures["nodes"] + allFeatures["edges"]
             self.load(loadableFeatures, add=True, silent=silent)
 
-        # Re-create Text after features are loaded (Text caches format functions)
-        if getattr(self, '_loaded_from_cfm', False):
-            addText(api)
-
         # Compute sections (requires section features to be loaded)
         if getattr(self, 'sectionsOK', False) and hasattr(self, 'sectionTypes'):
             sections_data = sectionsFromApi(api, self.sectionTypes, self.sectionFeats)
@@ -1308,15 +1304,30 @@ class Fabric:
         self.structureOK = len(self.structureTypes) > 0 and len(self.structureFeats) > 0
 
         # Setup sectionFeatsWithLanguage (include primary section feat and language variants)
+        node_feature_names = meta.get('features', {}).get('node', [])
         if self.sectionFeats:
             primary_feat = self.sectionFeats[0]
-            node_feature_names = meta.get('features', {}).get('node', [])
             self.sectionFeatsWithLanguage = tuple(
                 f for f in node_feature_names
                 if f == primary_feat or f.startswith(f"{primary_feat}@")
             )
         else:
             self.sectionFeatsWithLanguage = ()
+
+        # Populate textFeatures (mirrors .tf loading behavior)
+        if self.sectionsOK:
+            self.textFeatures |= set(self.sectionFeats)
+            self.textFeatures |= set(self.sectionFeatsWithLanguage)
+        if self.structureOK:
+            self.textFeatures |= set(self.structureFeats)
+        self.textFeatures |= set(self.formatFeats)
+
+        # Auto-load textFeatures before initializing Text API
+        # This ensures api.T.text() and section functions work correctly
+        available_features = set(node_feature_names)
+        for fName in self.textFeatures:
+            if fName in available_features:
+                self._loadNodeFeatureFromCfm(api, mmap_mgr, fName)
 
         # Setup remaining API components
         addOtype(api)
